@@ -1,0 +1,25 @@
+=== TEST FILES ===
+tests/test_analytics.py       17 tests       170 lines
+tests/test_chapter.py         21 tests       249 lines
+tests/test_daily_tasks.py     17 tests       177 lines
+tests/test_exam.py            19 tests       230 lines
+tests/test_home.py            22 tests       284 lines
+tests/test_login.py            6 tests        54 lines
+tests/test_otp.py             10 tests       137 lines
+tests/test_subtopic.py        21 tests       294 lines
+tests/test_topic.py           19 tests       210 lines
+
+=== PAGE OBJECTS ===
+tests/pages/analytics_page.py           141 lines  39 methods
+tests/pages/chapter_page.py             107 lines  26 methods
+tests/pages/daily_tasks_page.py         184 lines  52 methods
+tests/pages/exam_page.py                162 lines  46 methods
+tests/pages/home_page.py                 92 lines  26 methods
+tests/pages/login_page.py                17 lines   5 methods
+tests/pages/otp_page.py                  31 lines  10 methods
+tests/pages/subtopic_page.py            230 lines  64 methods
+tests/pages/topic_page.py               159 lines  39 methods
+
+=== ROOT ===
+.gitignore
+conftest.py
