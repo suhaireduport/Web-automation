@@ -13,6 +13,14 @@ class AddTopicsPage:
 
     URL = f"{BASE_URL}/home/homePractice/addtopic/problemBased"
 
+    # The same screen is also reached from a Question Library subject, through
+    # the Practice Now button of its study recommendations, which roots the
+    # route at the chapter being recommended instead of at Home.
+    SUBJECT_URL_PATTERN = re.compile(
+        r"https://eduport-react\.pages\.dev/home/questionLibrary/subject/\d+/.+"
+        r"/chapter/\d+/.+/addtopic$"
+    )
+
     def __init__(self, page):
         self.page = page
 
@@ -87,6 +95,12 @@ class AddTopicsPage:
 
     def get_topic(self, chapter_index, topic_index):
         return self.get_topics(chapter_index).nth(topic_index)
+
+    def get_practicable_topics(self, chapter_index=None):
+        """A topic whose questions have all been answered is served disabled."""
+        if chapter_index is None:
+            return self.page.locator(".atp-topic:not([disabled])")
+        return self.get_chapter(chapter_index).locator(".atp-topic:not([disabled])")
 
     def get_topic_title(self, chapter_index, topic_index):
         return self.get_topic(chapter_index, topic_index).locator(".atp-topic-title")
@@ -183,6 +197,47 @@ class PracticeConfigPage:
 
     def get_selected_mode(self):
         return self.page.locator(".cp-mode-on")
+
+    def get_mode_labels(self):
+        return self.page.locator(".cp-mode-label")
+
+    def get_mode_names(self):
+        return [text.strip() for text in self.get_mode_labels().all_inner_texts()]
+
+    def get_selected_mode_name(self):
+        return self.get_selected_mode().locator(".cp-mode-label").inner_text().strip()
+
+    # ---------- selected topics sheet ----------
+    # What the summary opens: the subject and chapter the practice was built
+    # from, and the topics picked under them. It has no close button - a test
+    # that needs the screen back navigates to it again.
+
+    def open_topic_summary(self):
+        self.get_topic_summary().click()
+        self.get_topic_sheet().wait_for()
+
+    def get_topic_sheet(self):
+        return self.page.locator(".cp-sheet")
+
+    def get_topic_sheet_title(self):
+        return self.page.locator(".cp-sheet-title")
+
+    def get_sheet_subject(self):
+        return self.page.locator(".cp-sheet-chapter-subject")
+
+    def get_sheet_chapter(self):
+        return self.page.locator(".cp-sheet-chapter-title")
+
+    def get_sheet_topics(self):
+        return self.page.locator(".cp-sheet-topic-text")
+
+    def get_sheet_topic_names(self):
+        """Topics are numbered here and not on the quiz that follows, so the
+        number is dropped rather than carried into a comparison."""
+        return [
+            re.sub(r"^\d+\.\s*", "", text).strip()
+            for text in self.get_sheet_topics().all_inner_texts()
+        ]
 
     def select_mode(self, name):
         self.get_mode(name).click()
