@@ -283,3 +283,104 @@ def test_no_contact_us_card_for_premium_user(page):
     contact_us_card = home_page.get_contact_us_card()
 
     expect(contact_us_card).to_be_hidden()
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# Home is served by one call, so what the screen renders can be read back
+# against the payload it was built from instead of against literals written
+# down here. Each test reloads home inside expect_response, because the answer
+# has to be listened for before the navigation that asks for it.
+# ---------------------------------------------------------------------------
+
+HOME_URL = "https://eduport-react.pages.dev/"
+
+HOME_API = "**/api/v3/home"
+COINS_API = "**/api/v3/analytics/leaderboard/coins"
+STREAK_API = "**/api/v3/analytics/streak/now"
+
+# The three shortcuts the app adds to the resource row itself. They are not in
+# the payload, so they are set aside before the two lists are compared.
+FIXED_RESOURCES = ["Lives", "Practice", "Question Library"]
+
+
+def reload_home(page, api):
+    """Reload home and hand back the payload the screen was built from."""
+    with page.expect_response(api) as answer:
+        page.goto(HOME_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"{api} answered {answer.value.status}"
+    return answer.value.json()
+
+
+def digits(text):
+    """The number a chip shows, without whatever it is decorated with."""
+    return re.sub(r"\D", "", text)
+
+
+def test_home_subjects_match_the_home_api(page):
+    body = reload_home(page, HOME_API)
+
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+
+    # Titles come back padded on the wire, and the card renders them trimmed.
+    expected = [subject["title"].strip() for subject in body["subjects"]]
+    shown = [text.strip() for text in home_page.get_subjects().all_inner_texts()]
+
+    expect(home_page.get_subjects()).to_have_count(len(expected))
+    assert shown == expected
+
+
+def test_home_resources_match_the_home_api(page):
+    body = reload_home(page, HOME_API)
+
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+
+    expected = [resource["title"].strip() for resource in body["resources"]]
+    titles = [t.strip() for t in home_page.get_resource_titles().all_inner_texts()]
+    shown = [title for title in titles if title not in FIXED_RESOURCES]
+
+    assert shown == expected
+
+
+def test_home_greeting_and_course_match_the_home_api(page):
+    user = reload_home(page, HOME_API)["user"]
+
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+
+    expect(home_page.get_greeting()).to_have_text(f"Hello, {user['name']}")
+    expect(home_page.get_course_button()).to_have_text(user["course_name"])
+
+
+def test_contact_us_card_follows_the_subscription_status_from_the_api(page):
+    """The card is the app's own answer to subscription_status, so the payload
+    decides which way this goes rather than the account being written down."""
+    body = reload_home(page, HOME_API)
+
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+
+    if body["subscription_status"]:
+        expect(home_page.get_contact_us_card()).to_be_hidden()
+    else:
+        expect(home_page.get_contact_us_card()).to_be_visible()
+
+
+def test_coin_chip_matches_the_coins_api(page):
+    coins = reload_home(page, COINS_API)["coins"]
+
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+
+    assert digits(home_page.get_coin_button().inner_text()) == str(coins)
+
+
+def test_streak_chip_matches_the_streak_api(page):
+    streak = reload_home(page, STREAK_API)["current_streak"]
+
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+
+    assert digits(home_page.get_streak_button().inner_text()) == str(streak)

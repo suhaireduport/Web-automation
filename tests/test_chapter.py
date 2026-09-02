@@ -247,3 +247,49 @@ def test_chapters_load_for_several_subjects(chapter_page, subject):
     """The same fixture, pointed at a different subject per run."""
     assert chapter_page.chapter_count() > 0
     print("subject", subject, "chapters:", chapter_page.chapter_count())
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The chapter list is served by one call keyed on the subject, so the cards can
+# be read back against it. The call has to be listened for before the subject
+# is opened, so these navigate themselves instead of using chapter_page.
+# ---------------------------------------------------------------------------
+
+CHAPTERS_API = "**/api/v3/syllabus/chapters?*"
+
+
+def open_subject_with_payload(page, logged_in_home, subject):
+    with page.expect_response(CHAPTERS_API) as answer:
+        logged_in_home.open_subject(subject)
+    assert answer.value.status == 200, f"chapters answered {answer.value.status}"
+
+    chapters = ChapterPage(page)
+    chapters.wait_for_chapters_loaded()
+    return chapters, answer.value.json()
+
+
+def test_chapter_list_matches_the_chapters_api(page, logged_in_home, subject):
+    chapter_page, body = open_subject_with_payload(page, logged_in_home, subject)
+
+    expected = [chapter["title"].strip() for chapter in body["chapters"]]
+    shown = [
+        text.strip() for text in chapter_page.get_chapter_titles().all_inner_texts()
+    ]
+
+    expect(chapter_page.get_chapters()).to_have_count(len(expected))
+    assert shown == expected
+
+
+def test_chapter_order_matches_the_chapters_api(page, logged_in_home, subject):
+    """The card numbers are positions on screen, so they have to follow the
+    order the payload lists the chapters in."""
+    chapter_page, body = open_subject_with_payload(page, logged_in_home, subject)
+
+    served = [chapter["order"] for chapter in body["chapters"]]
+
+    assert served == sorted(served), "the payload is not ordered"
+    expect(chapter_page.get_chapter_numbers()).to_have_text(
+        [str(i + 1) for i in range(len(served))]
+    )

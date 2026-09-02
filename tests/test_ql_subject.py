@@ -637,3 +637,73 @@ def test_the_topic_quiz_runs_as_a_problem_based_quick_practice(
     expect(quiz.get_title()).to_have_text(topic)
     expect(quiz.get_subtitle()).to_have_text("Quick Practice")
     expect(quiz.get_question_total()).to_have_text(str(asked))
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# A subject is served by one call carrying every chapter with its question
+# count, its answer state breakdown and the mastery reached, so the whole card
+# can be read back against it.
+# ---------------------------------------------------------------------------
+
+CHAPTERS_PROGRESS_API = "**/api/v3/question-bank/chapters-progress?*"
+
+# Which number in the payload each row of the breakdown is showing.
+STATUS_KEYS = {
+    "Correct": "correct_answers_count",
+    "Wrong": "wrong_answers_count",
+    "I don’t know": "unanswered_count",
+    "Bookmark": "bookmarked_count",
+}
+
+
+def open_first_subject_with_payload(page, question_library):
+    if question_library.subject_count() == 0:
+        pytest.skip(NO_SUBJECTS)
+
+    with page.expect_response(CHAPTERS_PROGRESS_API) as answer:
+        question_library.get_subject_cards().first.click()
+    assert answer.value.status == 200, f"chapters-progress answered {answer.value.status}"
+
+    subject = SubjectPage(page)
+    subject.wait_for_loaded()
+    return subject, answer.value.json()
+
+
+def test_subject_chapters_match_the_chapters_progress_api(page, question_library):
+    subject, body = open_first_subject_with_payload(page, question_library)
+
+    expected = [chapter["title"].strip() for chapter in body["chapters"]]
+    shown = [
+        subject.get_chapter_title_text(index)
+        for index in range(subject.chapter_count())
+    ]
+
+    expect(subject.get_title()).to_have_text(body["title"].strip())
+    assert shown == expected
+
+
+def test_chapter_question_counts_match_the_chapters_progress_api(page, question_library):
+    subject, body = open_first_subject_with_payload(page, question_library)
+
+    for index, chapter in enumerate(body["chapters"]):
+        assert subject.get_chapter_question_total(index) == chapter["question_count"]
+
+
+def test_chapter_answer_states_match_the_chapters_progress_api(page, question_library):
+    subject, body = open_first_subject_with_payload(page, question_library)
+
+    for index, chapter in enumerate(body["chapters"]):
+        for name, key in STATUS_KEYS.items():
+            assert subject.get_status_count(index, name) == chapter[key], (
+                f"{name} on {chapter['title']!r} does not match {key}"
+            )
+
+
+def test_chapter_mastery_matches_the_chapters_progress_api(page, question_library):
+    subject, body = open_first_subject_with_payload(page, question_library)
+
+    for index, chapter in enumerate(body["chapters"]):
+        shown = subject.get_mastery_value(index).inner_text()
+        assert re.sub(r"\D", "", shown) == str(chapter["ability_index"])

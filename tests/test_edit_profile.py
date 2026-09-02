@@ -325,3 +325,38 @@ def test_leaving_without_saving_discards_the_change(page, edit_page):
     page.reload()
 
     expect(HomePage(page).get_greeting()).to_have_text(f"Hello, {saved_name}")
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# Scenario:   the form shows the profile the server holds
+# Pre:        signed in
+# Steps:      open Edit Details while listening for the profile call
+# Expected:   every field and badge carries what the payload carried
+#
+# Read straight from the payload rather than from home, so this does not lean
+# on the greeting being up to date - which, per the xfail above, it is not.
+# ---------------------------------------------------------------------------
+
+PROFILE_API = "**/api/v3/profile"
+
+
+def test_edit_details_matches_the_profile_api(page):
+    with page.expect_response(PROFILE_API) as answer:
+        page.goto(EDIT_PROFILE_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"profile answered {answer.value.status}"
+    student = answer.value.json()["student"]
+
+    edit_page = EditProfilePage(page)
+    expect(edit_page.get_page()).to_be_visible()
+    expect(edit_page.get_full_name_input()).not_to_have_value("")
+
+    expect(edit_page.get_full_name_input()).to_have_value(student["name"])
+    expect(edit_page.get_date_of_birth_input()).to_have_value(student["dob"])
+    expect(edit_page.get_phone_badge()).to_contain_text(student["phone"])
+    expect(edit_page.get_student_id_badge()).to_have_text(
+        student["unique_student_id"]
+    )
+
+    assert edit_page.get_current_course() == student["course_name"]

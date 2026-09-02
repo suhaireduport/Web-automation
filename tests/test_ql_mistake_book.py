@@ -498,3 +498,49 @@ def test_the_wrong_filter_counts_the_answer_that_was_got_wrong(mistaken_question
     mistaken_question.click_filter()
 
     assert mistaken_question.get_filter_count("Wrong") >= 1
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The section is served by one call keyed on its type. Navigated directly with
+# nothing but a signed in page, so this reads whatever the account already
+# holds rather than the mistake the fixtures above make.
+# ---------------------------------------------------------------------------
+
+MISTAKE_PROGRESS_API = "**/api/v3/question-bank/progress?type=mistaken"
+
+
+def test_mistake_book_chapters_match_the_progress_api(page):
+    with page.expect_response(MISTAKE_PROGRESS_API) as answer:
+        page.goto(MISTAKE_BOOK_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"progress answered {answer.value.status}"
+    subjects = answer.value.json()["subjects"]
+
+    mistake_book = MistakeBookPage(page)
+    mistake_book.wait_for_loaded()
+
+    if not subjects:
+        expect(mistake_book.get_empty_state()).to_be_visible()
+        return
+
+    expect(mistake_book.get_tabs()).to_have_count(len(subjects))
+    for index, subject in enumerate(subjects):
+        expect(mistake_book.get_tabs().nth(index)).to_contain_text(
+            subject["title"].strip()
+        )
+        assert mistake_book.get_tab_count(index) == len(subject["chapters"])
+
+    # Chapter titles are numbered on this screen - "1. Laws of Motion" -
+    # where the payload carries the title on its own.
+    chapters = subjects[0]["chapters"]
+    shown = [
+        re.sub(r"^\d+\.\s*", "", text)
+        for text in mistake_book.get_chapter_title_texts()
+    ]
+
+    assert shown == [chapter["title"].strip() for chapter in chapters]
+    for index, chapter in enumerate(chapters):
+        expect(mistake_book.get_chapter_mistake_count(index)).to_have_text(
+            str(chapter["question_count"])
+        )

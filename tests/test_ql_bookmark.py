@@ -614,3 +614,47 @@ def test_removing_a_bookmark_takes_it_off_the_library_count(page, own_bookmark):
     # One fewer than this test counted on its way in, not an absolute another
     # test settled.
     expect(library.get_card_count(SECTION_CARD)).to_have_text(str(counted - 1))
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The section is served by one call keyed on its type. Navigated directly with
+# nothing but a signed in page, so this reads whatever the account already
+# holds rather than the bookmark the fixtures above make.
+# ---------------------------------------------------------------------------
+
+BOOKMARK_PROGRESS_API = "**/api/v3/question-bank/progress?type=bookmarked"
+
+
+def test_bookmark_chapters_match_the_progress_api(page):
+    with page.expect_response(BOOKMARK_PROGRESS_API) as answer:
+        page.goto(BOOKMARK_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"progress answered {answer.value.status}"
+    subjects = answer.value.json()["subjects"]
+
+    bookmarks = BookmarkPage(page)
+    bookmarks.wait_for_loaded()
+
+    if not subjects:
+        expect(bookmarks.get_empty_state()).to_be_visible()
+        return
+
+    expect(bookmarks.get_tabs()).to_have_count(len(subjects))
+    for index, subject in enumerate(subjects):
+        expect(bookmarks.get_tabs().nth(index)).to_contain_text(subject["title"].strip())
+        assert bookmarks.get_tab_count(index) == len(subject["chapters"])
+
+    # Chapter titles are numbered on this screen - "1. Laws of Motion" -
+    # where the payload carries the title on its own.
+    chapters = subjects[0]["chapters"]
+    shown = [
+        re.sub(r"^\d+\.\s*", "", text)
+        for text in bookmarks.get_chapter_title_texts()
+    ]
+
+    assert shown == [chapter["title"].strip() for chapter in chapters]
+    for index, chapter in enumerate(chapters):
+        expect(bookmarks.get_chapter_bookmark_count(index)).to_have_text(
+            str(chapter["question_count"])
+        )

@@ -168,3 +168,40 @@ def test_streak_button_opens_streak(page, analytics_page):
     analytics_page.click_streak_button()
 
     expect(page).to_have_url(STREAK_URL)
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The subject list under the tracker cards is drawn from the ability call, so
+# the names and the percentages can be read back against it.
+# ---------------------------------------------------------------------------
+
+ABILITY_API = "**/api/v3/analytics/ability/list"
+
+
+def test_analytics_subjects_match_the_ability_api(page):
+    with page.expect_response(ABILITY_API) as answer:
+        page.goto(ANALYTICS_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"ability answered {answer.value.status}"
+    subjects = answer.value.json()["subjects"]
+
+    analytics = AnalyticsPage(page)
+    analytics.wait_for_analytics_loaded()
+
+    if not subjects:
+        pytest.skip("No subjects for this user")
+
+    expected = [
+        (subject["title"].strip(), f"{subject['ability_index']}%")
+        for subject in subjects
+    ]
+    shown = [
+        (
+            analytics.get_subject_name(index).inner_text().strip(),
+            analytics.get_subject_percentage(index).inner_text().strip(),
+        )
+        for index in range(analytics.subject_count())
+    ]
+
+    assert shown == expected

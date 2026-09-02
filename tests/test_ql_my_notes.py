@@ -373,3 +373,49 @@ def test_report_offers_the_reasons_to_choose_from(note_question):
 
     # Not sent on purpose: it would raise a real report against the question.
     expect(note_question.get_report_send_button()).to_be_visible()
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The section is served by one call keyed on its type, carrying a subject per
+# tab and the chapters under it, so the screen can be read back against it.
+# Navigated directly rather than through the fixtures above, so this does not
+# lean on a note another test made.
+# ---------------------------------------------------------------------------
+
+NOTES_PROGRESS_API = "**/api/v3/question-bank/progress?type=note"
+
+
+def test_my_notes_chapters_match_the_progress_api(page):
+    with page.expect_response(NOTES_PROGRESS_API) as answer:
+        page.goto(MY_NOTES_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"progress answered {answer.value.status}"
+    subjects = answer.value.json()["subjects"]
+
+    my_notes = MyNotesPage(page)
+    my_notes.wait_for_loaded()
+
+    if not subjects:
+        expect(my_notes.get_empty_state()).to_be_visible()
+        return
+
+    # A tab reads "Chemistry (1)", where the number is chapters and not notes.
+    expect(my_notes.get_tabs()).to_have_count(len(subjects))
+    for index, subject in enumerate(subjects):
+        expect(my_notes.get_tabs().nth(index)).to_contain_text(subject["title"].strip())
+        assert my_notes.get_tab_count(index) == len(subject["chapters"])
+
+    # Chapter titles are numbered on this screen - "1. Laws of Motion" -
+    # where the payload carries the title on its own.
+    chapters = subjects[0]["chapters"]
+    shown = [
+        re.sub(r"^\d+\.\s*", "", text)
+        for text in my_notes.get_chapter_title_texts()
+    ]
+
+    assert shown == [chapter["title"].strip() for chapter in chapters]
+    for index, chapter in enumerate(chapters):
+        expect(my_notes.get_chapter_note_count(index)).to_have_text(
+            str(chapter["question_count"])
+        )

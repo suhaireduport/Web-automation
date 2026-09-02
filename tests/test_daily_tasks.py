@@ -175,3 +175,79 @@ def test_streak_button_opens_streak(page, daily_tasks_page):
     daily_tasks_page.click_streak_button()
 
     expect(page).to_have_url(STREAK_URL)
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The calendar strip is wider than the window the API answers for, so the dates
+# it returns are checked as a subset of what the strip offers rather than as an
+# equal list.
+# ---------------------------------------------------------------------------
+
+DAILY_TASKS_API = "**/api/v3/dailytasks/list"
+
+# The task buckets a day is served with. A bucket holding nothing is not drawn.
+TASK_KEYS = [
+    "study_tasks",
+    "practice_tasks",
+    "revision_tasks",
+    "exam_tasks",
+    "selflearn_tasks",
+    "catchup_tasks",
+]
+
+
+def open_daily_tasks_with_payload(page):
+    with page.expect_response(DAILY_TASKS_API) as answer:
+        page.goto(DAILY_TASKS_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"dailytasks answered {answer.value.status}"
+
+    daily_tasks = DailyTasksPage(page)
+    daily_tasks.wait_for_tasks_loaded()
+    return daily_tasks, answer.value.json()["results"]
+
+
+def day_of(date_text):
+    """"2026-08-25" -> 25"""
+    return int(date_text.split("-")[2])
+
+
+def test_calendar_dates_cover_what_the_daily_tasks_api_returns(page):
+    daily_tasks, results = open_daily_tasks_with_payload(page)
+
+    if not results:
+        pytest.skip("The API returned no days for this account")
+
+    shown = {int(text) for text in daily_tasks.get_day_numbers().all_inner_texts()}
+    served = {day_of(entry["date"]) for entry in results}
+
+    assert served <= shown, f"{sorted(served - shown)} are not on the strip"
+
+
+def test_pending_date_badges_match_the_daily_tasks_api(page):
+    daily_tasks, results = open_daily_tasks_with_payload(page)
+
+    shown = {int(text) for text in daily_tasks.get_day_numbers().all_inner_texts()}
+    pending = [
+        entry
+        for entry in results
+        if entry["pending_status"] and day_of(entry["date"]) in shown
+    ]
+
+    expect(daily_tasks.get_pending_date_badges()).to_have_count(len(pending))
+
+
+def test_task_groups_match_the_daily_tasks_api_for_the_selected_date(page):
+    daily_tasks, results = open_daily_tasks_with_payload(page)
+
+    selected = int(
+        daily_tasks.get_selected_date().locator(".dt-day-num").inner_text().strip()
+    )
+    entry = next((e for e in results if day_of(e["date"]) == selected), None)
+    if entry is None:
+        pytest.skip("The selected date is outside the range the API answered for")
+
+    expected = sum(1 for key in TASK_KEYS if entry[key])
+
+    assert daily_tasks.task_group_count() == expected

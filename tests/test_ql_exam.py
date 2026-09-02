@@ -673,3 +673,42 @@ def test_report_offers_the_reasons_to_choose_from(exam_question):
 
     # Not sent on purpose: it would raise a real report against the question.
     expect(exam_question.get_report_send_button()).to_be_visible()
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# Each tab is served by its own call, and the screen is held until it shows as
+# many cards as the answer carried, so the two can be read against each other.
+# ---------------------------------------------------------------------------
+
+BOOKMARKED_QUESTIONS_API = "**/api/v3/question-bank/exam-questions?type=bookmarked"
+NOTE_QUESTIONS_API = "**/api/v3/question-bank/exam-questions?type=note"
+
+
+def test_bookmarks_tab_matches_the_exam_questions_api(page):
+    with page.expect_response(BOOKMARKED_QUESTIONS_API) as answer:
+        page.goto(SECTION_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"exam-questions answered {answer.value.status}"
+    questions = answer.value.json()["questions"]
+
+    section = ExamsSectionPage(page)
+    section.wait_for_loaded()
+
+    expect(section.get_questions()).to_have_count(len(questions))
+    if questions:
+        expect(section.get_exam_titles()).to_have_count(len(questions))
+
+
+def test_exam_notes_tab_matches_the_exam_questions_api(page):
+    page.goto(SECTION_URL, wait_until="domcontentloaded")
+    section = ExamsSectionPage(page)
+    section.wait_for_loaded()
+
+    with page.expect_response(NOTE_QUESTIONS_API) as answer:
+        section.open_tab("Exam Notes")
+    assert answer.value.status == 200, f"exam-questions answered {answer.value.status}"
+
+    expect(section.get_questions()).to_have_count(
+        len(answer.value.json()["questions"])
+    )

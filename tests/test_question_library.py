@@ -185,3 +185,54 @@ def test_every_subject_shows_a_name_and_a_question_count(question_library):
         expect(question_library.get_subject_counts().nth(index)).to_have_text(
             re.compile(r"Questions:\s*\d+")
         )
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The landing screen is served by one call carrying the four section totals and
+# the subject list, so both can be read back against it rather than against a
+# count some other screen reports.
+# ---------------------------------------------------------------------------
+
+QL_HOME_API = "**/api/v3/question-bank/home"
+
+# Which number in the payload each card on the screen is showing.
+CARD_KEYS = {
+    "My Notes": "notes",
+    "Bookmarks": "bookmarks",
+    "Mistake Book": "mistake_book",
+    "Exams": "ql_exams_count",
+}
+
+
+def open_library_with_payload(page):
+    with page.expect_response(QL_HOME_API) as answer:
+        page.goto(QUESTION_LIBRARY_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200, f"question-bank/home answered {answer.value.status}"
+
+    library = QuestionLibraryPage(page)
+    library.wait_for_loaded()
+    return library, answer.value.json()
+
+
+def test_section_card_counts_match_the_question_bank_home_api(page):
+    library, body = open_library_with_payload(page)
+
+    for section, key in CARD_KEYS.items():
+        expect(library.get_card_count(section)).to_have_text(str(body[key]))
+
+
+def test_subject_list_matches_the_question_bank_home_api(page):
+    library, body = open_library_with_payload(page)
+    subjects = body["subjects"]
+
+    expect(library.get_subject_cards()).to_have_count(len(subjects))
+    if not subjects:
+        return
+
+    names = [text.strip() for text in library.get_subject_names().all_inner_texts()]
+    counts = [text.strip() for text in library.get_subject_counts().all_inner_texts()]
+
+    assert names == [subject["title"].strip() for subject in subjects]
+    assert counts == [f"Questions: {subject['questions_count']}" for subject in subjects]

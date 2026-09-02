@@ -208,3 +208,41 @@ def test_open_topics_page_directly(page, topic_page):
 
     expect(page).to_have_url(topics_url)
     expect(topic_page.get_topic_titles()).to_have_text(expected_titles)
+
+
+# ---------------------------------------------------------------------------
+# API verification
+#
+# The topic list and the chapter it names both come from the chapter content
+# call, so the screen can be read back against it.
+# ---------------------------------------------------------------------------
+
+CHAPTER_CONTENT_API = "**/api/v3/syllabus/chapter-content/?*"
+
+
+def test_topic_list_matches_the_chapter_content_api(page, subject):
+    home_page = HomePage(page)
+    home_page.get_subjects().first.wait_for()
+    home_page.open_subject(subject)
+
+    chapter_page = ChapterPage(page)
+    chapter_page.wait_for_chapters_loaded()
+
+    unlocked = chapter_page.get_unlocked_chapters()
+    if unlocked.count() == 0:
+        pytest.skip("Every chapter is locked for this subject")
+
+    with page.expect_response(CHAPTER_CONTENT_API) as answer:
+        unlocked.first.click()
+    assert answer.value.status == 200, f"chapter-content answered {answer.value.status}"
+    body = answer.value.json()
+
+    topic_page = TopicPage(page)
+    topic_page.wait_for_topics_loaded()
+
+    expected = [topic["title"].strip() for topic in body["topics"]]
+    shown = [text.strip() for text in topic_page.get_topic_titles().all_inner_texts()]
+
+    expect(topic_page.get_topics()).to_have_count(len(expected))
+    assert shown == expected
+    expect(topic_page.get_title()).to_have_text(body["chapter_data"]["title"].strip())
