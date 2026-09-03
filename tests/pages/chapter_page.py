@@ -91,6 +91,27 @@ class ChapterPage:
     def get_completed_texts(self):
         return self.page.locator(".ch-item-completed")
 
+    def get_progress_percent(self, index):
+        return float(self.get_progress_width(index).rstrip("%"))
+
+    def get_completed_counts(self, index):
+        """The "3/22 Completed" line as (completed, total)."""
+        match = re.search(r"(\d+)\s*/\s*(\d+)", self.get_completed_text(index).inner_text())
+        return int(match.group(1)), int(match.group(2))
+
+    def get_subject_totals(self):
+        """What the subject adds up to, as (completed, total).
+
+        A subject publishes no figure of its own anywhere in the app. This page
+        is the subject, so its progress is only ever the sum of the chapters
+        listed on it."""
+        counts = [self.get_completed_counts(i) for i in range(self.chapter_count())]
+        return sum(done for done, _ in counts), sum(total for _, total in counts)
+
+    def get_subject_percent(self):
+        done, total = self.get_subject_totals()
+        return done / total * 100 if total else 0.0
+
     # ---------- locked / unlocked ----------
 
     def get_locked_chapters(self):

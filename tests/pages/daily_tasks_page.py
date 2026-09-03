@@ -1,3 +1,6 @@
+import re
+
+
 class DailyTasksPage:
     URL = "https://eduport-react.pages.dev/daily-tasks"
 
@@ -122,7 +125,76 @@ class DailyTasksPage:
         return self.page.locator(".dt-task-group-title")
 
     def get_task_group(self, title):
-        return self.page.locator(".dt-task-group").filter(has_text=title)
+        """Matched on the group's own heading, so that a group is not also
+        found by the title of a card sitting inside it."""
+        pattern = re.compile(r"^\s*" + re.escape(title) + r"\s*$")
+        return self.page.locator(".dt-task-group").filter(
+            has=self.page.locator(".dt-task-group-title").filter(has_text=pattern)
+        )
+
+    # ---------- task cards ----------
+    #
+    # One card per task in a group. A card carries the title of what the task
+    # is on, how far through it the student is, and - once it is finished - a
+    # tick where the coin marker sits.
+
+    # group is the heading a card sits under ("Practice", "Study", ...).
+    # Left out, the cards of every group are taken together in the order they
+    # are drawn.
+
+    def get_task_cards(self, group=None):
+        if group is None:
+            return self.page.locator(".dt-task-card")
+        return self.get_task_group(group).locator(".dt-task-card")
+
+    def task_card_count(self, group=None, timeout=10000):
+        return self._count_when_ready(self.get_task_cards(group), timeout)
+
+    def get_task_card(self, index, group=None):
+        return self.get_task_cards(group).nth(index)
+
+    def get_task_card_title(self, index, group=None):
+        return self.get_task_card(index, group).locator(".dt-task-info strong")
+
+    def get_task_card_titles(self, group=None):
+        return [
+            title.strip()
+            for title in self.get_task_cards(group)
+            .locator(".dt-task-info strong")
+            .all_inner_texts()
+        ]
+
+    def get_task_card_sub(self, index, group=None):
+        """The line under the title, which on a practice card reads
+        "2/3 Questions"."""
+        return self.get_task_card(index, group).locator(".dt-task-sub")
+
+    def get_task_card_counts(self, index, group=None):
+        """That line as (done, total)."""
+        match = re.search(
+            r"(\d+)\s*/\s*(\d+)", self.get_task_card_sub(index, group).inner_text()
+        )
+        return int(match.group(1)), int(match.group(2))
+
+    def get_task_card_progress_fill(self, index, group=None):
+        return self.get_task_card(index, group).locator(".dt-task-progress-fill")
+
+    def get_task_completed_marks(self, group=None):
+        if group is None:
+            return self.page.locator(".dt-coin-tick-only")
+        return self.get_task_group(group).locator(".dt-coin-tick-only")
+
+    def is_task_complete(self, index, group=None):
+        """A finished task swaps its coin marker for a tick, and that tick is
+        the whole of the completion state the card shows."""
+        return (
+            self.get_task_card(index, group).locator(".dt-coin-tick-only").count() > 0
+        )
+
+    def click_task_card(self, index, group=None):
+        self.get_task_card(index, group).click()
+
+    # ---------- live classes ----------
 
     def get_live_cards(self):
         return self.page.locator(".dt-live-card")

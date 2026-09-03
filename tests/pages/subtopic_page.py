@@ -56,6 +56,11 @@ class SubtopicPage:
     def get_done_strip_items(self):
         return self.page.locator(".pl-strip-done")
 
+    def get_finished_video_item(self):
+        """The video's own circle in the strip once the video has been played
+        out: it swaps its red cross badge for a green tick."""
+        return self.page.locator(".pl-strip-video.pl-strip-done")
+
     def get_current_strip_item(self):
         return self.page.locator(".pl-strip-current-ring")
 
@@ -331,6 +336,52 @@ class SubtopicPage:
     def seek_to_end(self):
         """Jump to the last seconds so the video finishes without waiting it out."""
         self.seek_to(max(self.get_duration() - 3, 0))
+
+    def wait_for_restore(self, position, timeout=20000):
+        """Wait for the app to put the video back where it was last left.
+
+        The restore lands a few seconds after the player renders, and later
+        still on a busy run, so it is waited for rather than slept through."""
+        self.wait_for_time_past(max(position, 0) - 1, timeout=timeout)
+
+    # How many seconds of the video are actually played on the way to a mark.
+    # The player does not report the media element's position when it is left:
+    # it reports a figure of its own that it samples every second or two, so a
+    # jump followed straight away by a pause is reported at the position the
+    # video held before the jump - or not reported at all, when that figure has
+    # not moved since the player opened. Playing the last stretch up to the
+    # mark gives that sampling time to happen.
+    RUN_UP_SECONDS = 5
+
+    def watch_up_to(self, fraction, attempts=3):
+        """Play up to a fraction of the video and stop there.
+
+        The last few seconds before the mark are played rather than jumped, so
+        that the player has taken the position for itself by the time it is
+        stopped. A restore arriving late drags the video back off the mark, so
+        the position is confirmed after settling rather than trusted the moment
+        it reads right. Returns where it came to rest."""
+        target = self.get_duration() * fraction
+        run_up = min(self.RUN_UP_SECONDS, target)
+
+        for _ in range(attempts):
+            self.seek_to(target - run_up)
+            try:
+                self.wait_for_time_past(target, timeout=15000)
+            except Exception:
+                continue
+            self.pause()
+            self.page.wait_for_timeout(1500)
+            if self.get_current_time() >= target:
+                return self.get_current_time()
+
+        raise AssertionError(f"the video would not hold at {fraction:.0%}")
+
+    def watch_to_the_end(self, timeout=60000):
+        """Play the video out. The replay overlay is the player saying it is
+        over, which is the point the finished position is sent from."""
+        self.seek_to_end()
+        self.get_replay_overlay().wait_for(timeout=timeout)
 
     def get_replay_overlay(self):
         return self.page.locator(".pl-replay-overlay")

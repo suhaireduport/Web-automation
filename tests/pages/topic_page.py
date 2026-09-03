@@ -1,3 +1,18 @@
+import re
+
+
+# The subtopic ring is two SVG circles: a grey track that is always drawn, and
+# an arc for the watched part whose stroke-dasharray is "<filled> <gap>" over
+# the circumference. A subtopic that has never been opened has no arc at all,
+# which is what reads back as nought.
+RING_PERCENT = (
+    "svg => { const arc = svg.querySelectorAll('circle')[1];"
+    " if (!arc) return 0;"
+    " const filled = parseFloat(arc.getAttribute('stroke-dasharray'));"
+    " return filled / (2 * Math.PI * arc.r.baseVal.value) * 100; }"
+)
+
+
 class TopicPage:
     def __init__(self, page):
         self.page = page
@@ -42,6 +57,18 @@ class TopicPage:
     def get_lessons_completed(self):
         return self.page.locator(".tp-progress-label")
 
+    def get_progress_percent(self):
+        """The header bar as a number.
+
+        It is the chapter's own figure rather than the topic's: the bar and the
+        label next to it count finished topics, not anything per topic."""
+        return float(self.get_progress_width().rstrip("%"))
+
+    def get_lessons_completed_counts(self):
+        """The "3/22 Lessons Completed" line as (completed, total)."""
+        match = re.search(r"(\d+)\s*/\s*(\d+)", self.get_lessons_completed().inner_text())
+        return int(match.group(1)), int(match.group(2))
+
     # ---------- topics ----------
 
     def get_topics(self):
@@ -72,6 +99,19 @@ class TopicPage:
 
     def get_topic_titles(self):
         return self.page.locator(".tp-topic-title")
+
+    def get_topic_tick(self, index):
+        return self.get_topic_number(index).locator(".tp-topic-num-tick")
+
+    def get_completed_topics(self):
+        return self.page.locator(".tp-topic-num-done")
+
+    def is_topic_complete(self, index):
+        """A topic carries no percentage of its own. Its number badge turns
+        into a tick once every subtopic under it is finished, and that is the
+        whole of the state kept at this level."""
+        classes = self.get_topic_number(index).get_attribute("class") or ""
+        return "tp-topic-num-done" in classes
 
     # ---------- expand / collapse ----------
 
@@ -120,19 +160,65 @@ class TopicPage:
     def get_subtopic_duration(self, topic_index, subtopic_index=0):
         return self.get_subtopic(topic_index, subtopic_index).locator(".tp-subtopic-duration")
 
+    def get_subtopic_duration_at(self, flat_index):
+        """The length shown against the subtopic at that position in the
+        expanded list, drawn "12:34" or "1:12:34"."""
+        return self.get_all_subtopics().nth(flat_index).locator(".tp-subtopic-duration")
+
+    def get_subtopic_duration_seconds(self, flat_index):
+        parts = [
+            int(part)
+            for part in self.get_subtopic_duration_at(flat_index).inner_text().split(":")
+        ]
+        seconds = 0
+        for part in parts:
+            seconds = seconds * 60 + part
+        return seconds
+
     def get_progress_rings(self):
         return self.page.locator(".tp-progress-ring-wrap")
+
+    def get_progress_ring(self, flat_index):
+        """The ring of the subtopic at that position in the expanded list."""
+        return self.get_all_subtopics().nth(flat_index).locator(".tp-progress-ring-svg")
+
+    def get_ring_circles(self, flat_index):
+        return self.get_progress_ring(flat_index).locator("circle")
+
+    def get_subtopic_progress(self, flat_index):
+        """How full one subtopic's ring is, as a percentage."""
+        return self.get_progress_ring(flat_index).evaluate(RING_PERCENT)
+
+    def get_subtopic_progresses(self):
+        """Every ring on the page, in the order the subtopics are listed.
+
+        Read in one hop rather than one call per ring, because a chapter can
+        carry a few dozen subtopics."""
+        return self.page.locator(".tp-subtopic .tp-progress-ring-svg").evaluate_all(
+            f"svgs => svgs.map({RING_PERCENT})"
+        )
 
     def click_subtopic(self, topic_index, subtopic_index=0):
         self.get_subtopic(topic_index, subtopic_index).click()
 
     # ---------- subtopic types ----------
 
-    def expand_all_topics(self):
-        for i in range(self.get_topics().count()):
-            if not self.is_topic_expanded(i):
-                self.toggle_topic(i)
-        self.page.wait_for_timeout(1000)
+    def expand_all_topics(self, attempts=3):
+        """Open every topic, so that all of the subtopics are on screen in one
+        flat order.
+
+        A topic that does not take its click keeps its subtopics out of the
+        list and quietly shifts the position of every subtopic after it, so the
+        topics are checked for having opened rather than the clicks being
+        assumed to have landed."""
+        for _ in range(attempts):
+            for i in range(self.get_topics().count()):
+                if not self.is_topic_expanded(i):
+                    self.toggle_topic(i)
+            self.page.wait_for_timeout(1000)
+            if self.get_expanded_topics().count() == self.get_topics().count():
+                return
+        raise AssertionError("not every topic would open")
 
     def get_all_subtopics(self):
         return self.page.locator(".tp-subtopic")

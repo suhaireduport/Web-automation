@@ -1,4 +1,7 @@
 import re
+from html import unescape
+
+from playwright.sync_api import Error as PlaywrightError
 
 from pages.home_page import HomePage
 from pages.question_library_section_page import BASE_URL, normalise
@@ -335,6 +338,11 @@ class PracticeQuestionPage:
     def get_back_button(self):
         return self.page.locator(".tq-back")
 
+    def get_coin_chip(self):
+        """The running balance in the quiz header. It is the student's whole
+        balance, not a tally of the quiz being taken."""
+        return self.page.locator(".tq-coin-chip")
+
     def get_question(self):
         return self.page.locator(".tq-question")
 
@@ -358,6 +366,32 @@ class PracticeQuestionPage:
 
     def get_option_text_values(self):
         return [text.strip() for text in self.get_option_texts().all_inner_texts()]
+
+    # An option carrying maths is typeset rather than written out, so its text
+    # on screen is nothing like the markup it was served as. What is the same
+    # on both sides is the source: the typesetter keeps it in an annotation
+    # beside what it drew, so each formula is swapped back for its source
+    # before the option is read.
+    OPTION_SOURCE = """
+        option => {
+            const text = option.querySelector('.tq-opt-text') || option;
+            const copy = text.cloneNode(true);
+            copy.querySelectorAll('.katex').forEach(formula => {
+                const source = formula.querySelector(
+                    'annotation[encoding="application/x-tex"]');
+                formula.replaceWith(document.createTextNode(
+                    source ? source.textContent : formula.textContent));
+            });
+            return copy.textContent;
+        }
+    """
+
+    def get_option_sources(self):
+        """Every option of the question on screen, as close to the markup it
+        was served as the screen can give back."""
+        return self.get_options().evaluate_all(
+            f"options => options.map({self.OPTION_SOURCE})"
+        )
 
     def select_option(self, index):
         self.get_option(index).click()
@@ -447,6 +481,44 @@ class PracticeQuestionPage:
     def get_result_coins(self):
         return self.page.locator(".tq-result-coins")
 
+    def get_result_coins_block(self):
+        return self.page.locator(".tq-result-coins-block")
+
+    def get_result_coins_sign(self):
+        """The "+" drawn beside the figure. Only a quiz that paid something
+        carries one: a quiz that cost the student is drawn with the minus in
+        the figure itself."""
+        return self.page.locator(".tq-result-coins-sign")
+
+    def award_is_marked_negative(self):
+        """Whether the result screen is styled as a loss."""
+        classes = self.get_result_coins_block().get_attribute("class") or ""
+        return "tq-coins-negative" in classes
+
+    def get_awarded_coins(self):
+        """What the result screen says the quiz paid, as a signed number."""
+        return int(re.search(r"-?\d+", self.get_result_coins().inner_text()).group())
+
+    def get_result_stat_values(self):
+        """The result tallies as {"Correct": 2, "I don't know": 0, "Wrong": 1}.
+
+        A stat is drawn "2/3" over its label: how many of the questions fell
+        into that bucket, over how many were asked. The figure and the total
+        are separate elements, so the stat is read whole and parsed."""
+        stats = self.page.locator(".tq-result-stat")
+        values = {}
+        for index in range(stats.count()):
+            text = stats.nth(index).inner_text()
+            count = re.search(r"(\d+)\s*/\s*(\d+)", text)
+            label = re.sub(r"^[\d/\s]+", "", text).strip()
+            values[label] = int(count.group(1))
+        return values
+
+    def get_result_stat_total(self):
+        """How many questions the result screen is counting over."""
+        text = self.page.locator(".tq-result-stat").first.inner_text()
+        return int(re.search(r"\d+\s*/\s*(\d+)", text).group(1))
+
     def get_close_button(self):
         return self.page.locator(".tq-collect-btn")
 
@@ -498,3 +570,177 @@ def start_quick_practice(page, questions=1):
     practice.get_take_test_button().wait_for(timeout=30000)
     practice.take_test()
     return practice, {"subject": subject, "chapter": chapter, "topic": topic}
+
+
+# ---------------------------------------------------------------------------
+# Driving a practice for its coins
+#
+# A quick practice is what the app pays coins for, and it pays on completion
+# rather than per answer: the submit that carries completed=true answers with
+# what the whole set came to. To check what an answer is worth, then, a
+# practice has to be driven deliberately - every question right, or every
+# question wrong, or every question passed on - and the figure that comes back
+# read against the rule the app publishes.
+#
+# Which option is the right one is not on the screen until an answer has been
+# given, so it is taken from the payload the questions were served in. Getting
+# one wrong brings on a similar question to try again, so the key covers those
+# alternatives too and questions are answered until the result appears rather
+# than a fixed number of times.
+# ---------------------------------------------------------------------------
+
+PROBLEM_QUIZ_API = "practice-quiz/problem-quiz"
+SUBMIT_API = "practice-quiz/submit/problem-quiz"
+
+CORRECT = "correct"
+WRONG = "wrong"
+DONT_KNOW = "idk"
+
+# A wrong answer can bring on a retry, so the number of questions a set ends up
+# asking is not the number it was started with. This only bounds the loop.
+MAX_QUESTIONS = 30
+
+
+def signature(text):
+    """What is left of an option once everything that survives neither the
+    markup nor the typesetting is dropped.
+
+    Enough to tell the options of one question apart and to recognise the same
+    option again on screen, and nothing more: tags, spacing, punctuation and
+    the delimiters maths is wrapped in all go, while the digits, letters and
+    signs that carry the meaning stay. The minus of a typeset formula is not
+    the hyphen of the source, so the two are made one."""
+    text = unescape(re.sub(r"<[^>]+>", " ", text or "")).replace("\u2212", "-")
+    return re.sub(r"[^0-9A-Za-z\-+=<>^_]", "", text)
+
+
+def answer_key(payload):
+    """{the options of a question: which of them are right}, by position.
+
+    Keyed on the options rather than on the question, because the options are
+    what can be read back off the screen, and they tell the two halves of an
+    adaptive pair apart just as well."""
+    key = {}
+
+    def add(question):
+        options = tuple(signature(option["value"]) for option in question["options"])
+        right = str(question.get("right_answers", ""))
+        key[options] = [int(n) - 1 for n in re.findall(r"\d+", right)]
+        for alternative in question.get("alternatives") or []:
+            add(alternative)
+
+    for question in payload.get("questions", []):
+        add(question)
+    return key
+
+
+def choose_option(practice, key, how):
+    """Which option to click for the question on screen.
+
+    Returns None when the key does not carry this question, which leaves it to
+    the caller to decide whether that is a problem."""
+    options = tuple(signature(source) for source in practice.get_option_sources())
+    right = key.get(options)
+    if right is None:
+        return None
+    if how == CORRECT:
+        return right[0]
+    return next(index for index in range(len(options)) if index not in right)
+
+
+def take_practice_quiz(page, how=CORRECT, questions=1, attempts=2):
+    """Start a quick practice, answer every question the same way, and go on
+    to the result screen.
+
+    how is CORRECT, WRONG or DONT_KNOW. Hands back what the app was asked and
+    what it answered with - the questions served, every submit it made and the
+    completion it finished on - so a test can hold the coins it paid against
+    the rule it publishes. Returns None when the account has no question left
+    to practise, which is a test data problem rather than a failure.
+
+    A set that is part way through cannot be picked up from the beginning, so
+    a screen that will not come up in time is met by starting a fresh set
+    rather than by carrying on with a half driven one. Only that is retried: a
+    set marked in a way it was not answered is a finding, and is left to
+    fail."""
+    for attempt in range(attempts):
+        try:
+            return _drive_practice_quiz(page, how, questions)
+        except PlaywrightError as slow:
+            if attempt == attempts - 1:
+                raise
+            print(f"the practice would not come up ({slow}); starting another")
+            page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+
+
+def _drive_practice_quiz(page, how, questions):
+    served = []
+    submitted = []
+
+    def collect(response):
+        if PROBLEM_QUIZ_API in response.url and SUBMIT_API not in response.url:
+            served.append(response.json())
+        elif SUBMIT_API in response.url:
+            submitted.append(
+                {
+                    "sent": response.request.post_data_json,
+                    "answered": response.json(),
+                }
+            )
+
+    page.on("response", collect)
+    try:
+        practice, practised = start_quick_practice(page, questions=questions)
+        if practice is None:
+            return None
+
+        key = {}
+        for payload in served:
+            key.update(answer_key(payload))
+
+        asked = 0
+        for _ in range(MAX_QUESTIONS):
+            practice.wait_for_question()
+            asked += 1
+
+            if how == DONT_KNOW:
+                practice.get_dont_know_button().click()
+                practice.get_correct_options().first.wait_for()
+            else:
+                choice = choose_option(practice, key, how)
+                assert choice is not None, (
+                    "the quiz asked a question that was not in the payload it "
+                    "was served in, so there is no way to answer it on purpose"
+                )
+                practice.select_option(choice)
+                practice.submit()
+
+            practice.next_question()
+            try:
+                practice.wait_for_next_question(timeout=8000)
+            except Exception:
+                break
+
+        practice.wait_for_result()
+    finally:
+        page.remove_listener("response", collect)
+
+    finish = next(
+        (call for call in reversed(submitted) if "coin" in call["answered"]), None
+    )
+    assert finish is not None, (
+        "the practice reached its result screen without a submit that finished "
+        f"the set: {submitted}"
+    )
+    return {
+        "practice": practice,
+        "practised": practised,
+        "asked": asked,
+        "served": served,
+        "submitted": submitted,
+        # The submit that finished the set, and what it was answered with. It
+        # is the only one carrying a coin figure: the ones before it are
+        # answered "Question Submitted Successfully" and nothing more.
+        "completion": finish["answered"],
+        "completion_request": finish["sent"],
+    }
