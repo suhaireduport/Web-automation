@@ -2,10 +2,10 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.chapter_page import ChapterPage
 
-MOBILE = "8893963137"
 OTP = "430582"
 
 OTP_URL = "https://eduport-react.pages.dev/otp"
@@ -29,7 +29,7 @@ DEFAULT_SUBJECT = 0
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture

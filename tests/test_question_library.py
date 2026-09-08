@@ -10,10 +10,10 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.question_library_page import QuestionLibraryPage
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
@@ -29,7 +29,7 @@ INFO_TOPICS = ["Question Library", "Mistake book", "Bookmark", "My Notes"]
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture

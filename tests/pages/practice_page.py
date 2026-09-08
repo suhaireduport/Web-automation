@@ -81,6 +81,10 @@ class AddTopicsPage:
     def get_chapter_title(self, index):
         return self.get_chapter(index).locator(".atp-chapter-title")
 
+    def get_open_chapter_title(self):
+        """The title of the chapter the picker opens already unfolded."""
+        return self.page.locator(".atp-chapter-open .atp-chapter-title")
+
     def is_chapter_open(self, index):
         return "atp-chapter-open" in (self.get_chapter(index).get_attribute("class") or "")
 
@@ -423,6 +427,17 @@ class PracticeQuestionPage:
 
     def click_bookmark(self):
         self.get_bookmark_button().click()
+
+    def wait_for_bookmark_state(self, bookmarked, timeout=15000):
+        """Hold until the control shows the state asked for.
+
+        The button flips as soon as it is pressed, so its own look proves
+        nothing; this waits for the label the screen settles on once the call
+        behind it has come back."""
+        label = "Remove bookmark" if bookmarked else "Add bookmark"
+        self.page.locator(f".tq-bookmark[aria-label='{label}']").wait_for(
+            timeout=timeout
+        )
 
     def get_note_button(self):
         return self.page.locator(".tq-note-fab")

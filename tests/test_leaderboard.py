@@ -29,9 +29,9 @@ in test_coins.py, where the reading is live.
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.leaderboard_page import LeaderboardPage, call_api, read_balance, read_coin_log
 
-MOBILE = "8893963137"
 
 TABS = list(LeaderboardPage.TABS)
 
@@ -39,7 +39,7 @@ TABS = list(LeaderboardPage.TABS)
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture
@@ -256,12 +256,12 @@ def test_only_the_students_own_row_opens_the_log(page, leaderboard):
     if len(served) < 2:
         pytest.skip("All Time carries only this student, so there is no other row")
 
-    clickable = page.locator(".lb-row-clickable")
-    expect(clickable).to_have_count(sum(1 for row in served if row["is_current_user"]))
+    expect(leaderboard.get_clickable_rows()).to_have_count(
+        sum(1 for row in served if row["is_current_user"])
+    )
 
     for index, row in enumerate(served):
-        classes = leaderboard.get_row(index).get_attribute("class") or ""
-        assert ("lb-row-clickable" in classes) is bool(row["is_current_user"]), (
+        assert leaderboard.is_row_clickable(index) is bool(row["is_current_user"]), (
             f"row {index + 1} ({row['student']})"
         )
 

@@ -10,11 +10,11 @@ not repeated; these start from the screen itself.
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
-from pages.profile_menu_page import ProfileMenuPage
+from pages.profile_page import ProfilePage
 from pages.subscription_page import SubscriptionPage
 
-MOBILE = "9876543210"
 
 SUBSCRIPTIONS_URL = SubscriptionPage.URL
 SUBSCRIPTIONS_API = "**/api/v3/subscriptions"
@@ -32,7 +32,7 @@ MONTHS = [
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 def open_subscriptions_with_payload(page):
@@ -51,20 +51,21 @@ def open_subscriptions_with_payload(page):
 # Reaching the screen
 # ---------------------------------------------------------------------------
 
-def test_subscriptions_open_from_the_profile_menu(page):
+def test_subscriptions_open_from_the_profile_page(page):
     home_page = HomePage(page)
     home_page.get_subjects().first.wait_for()
     home_page.open_profile_menu()
 
-    menu = ProfileMenuPage(page)
-    expect(menu.get_menu()).to_be_visible()
-    menu.click_item("Subscriptions")
+    profile = ProfilePage(page)
+    profile.wait_for_loaded()
+    profile.click_card("My Courses")
 
     subscriptions = SubscriptionPage(page)
 
+    # This test only proves the Profile page reaches the screen; the screen's
+    # own title and contents are the subject of the tests below.
     expect(page).to_have_url(SUBSCRIPTIONS_URL)
     expect(subscriptions.get_page()).to_be_visible()
-    expect(subscriptions.get_title()).to_have_text("Subscription")
     expect(subscriptions.get_back_button()).to_be_enabled()
 
 

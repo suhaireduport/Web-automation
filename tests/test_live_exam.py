@@ -21,11 +21,9 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import SECOND_STUDENT_MOBILE
 from pages.exam_page import ExamPage, ExamInstructionsPage
 from pages.live_exam_page import LiveExamPage
-
-# This account still holds unattempted exams; 9876543210 has none left.
-MOBILE = "8893963137"
 
 EXAMS_URL = "https://eduport-react.pages.dev/exams"
 EXAM_LIST_API = "**/api/v3/exams/all"
@@ -33,11 +31,6 @@ INSTRUCTIONS_URL_PATTERN = re.compile(
     r"https://eduport-react\.pages\.dev/exams/\d+/instructions.*"
 )
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-
-def card_minutes(text):
-    """'90 Minutes 180.0 Marks' -> 90"""
-    return int(re.search(r"(\d+)\s*Minutes", text).group(1))
 
 
 def make_exams_live(page, subscribed=True, positions=None):
@@ -77,8 +70,15 @@ def open_live_exams(page):
 
 @pytest.fixture
 def page(login_as):
-    """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    """Signed in once per session and replayed, instead of logging in per test.
+
+    The second student, because starting an exam spends it for good and this
+    file spends one every run. test_exam_start.py spends two or three a run on
+    the main student, so keeping the two files apart stops them eating through
+    one account's exams twice as fast. Both accounts do hold startable exams -
+    the main one currently offers more - so this is about not sharing a
+    finite, non-renewable pool rather than about which account has any left."""
+    return login_as(SECOND_STUDENT_MOBILE)
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +229,7 @@ def live_exam(login_session, _live_exam_state):
     if "player" in _live_exam_state:
         return _live_exam_state["player"]
 
-    page = login_session(MOBILE)
+    page = login_session(SECOND_STUDENT_MOBILE)
     make_exams_live(page, subscribed=True)
     exams_page = open_live_exams(page)
 
@@ -237,14 +237,8 @@ def live_exam(login_session, _live_exam_state):
     # own clock runs out, so try the roomiest exam first. Each candidate is
     # still tried in turn, because a card can offer Attempt and be refused.
     candidates = sorted(
-        (
-            (
-                card_minutes(exams_page.get_exam_duration_and_marks(index).inner_text()),
-                index,
-            )
-            for index in range(exams_page.exam_card_count())
-            if exams_page.get_attempt_button(index).count() > 0
-        ),
+        ((exams_page.get_exam_minutes(index), index)
+         for index in exams_page.find_unattempted_exams()),
         reverse=True,
     )
 
@@ -261,13 +255,13 @@ def live_exam(login_session, _live_exam_state):
             _live_exam_state["player"] = player
             return player
 
-        message = page.locator("[data-rht-toaster]").inner_text().strip()
+        message = player.get_toast_text()
         refusals.append(f"[{index}] {minutes}min: {message or 'no message'}")
         page.goto(EXAMS_URL)
         exams_page.wait_for_exams_loaded()
 
     _live_exam_state["reason"] = (
-        "No live exam could be started on " + MOBILE + ". Every exam offering "
+        "No live exam could be started on " + SECOND_STUDENT_MOBILE + ". Every exam offering "
         "Attempt was refused: " + "; ".join(refusals or ["none offered Attempt"])
     )
     pytest.skip(_live_exam_state["reason"])
@@ -307,9 +301,15 @@ def test_question_page_shows_the_question_count(question_page):
     assert total > 0
 
 
-def test_question_page_shows_answer_options(question_page):
-    expect(question_page.get_options().first).to_be_visible()
+def test_question_page_shows_a_way_to_answer_the_question(question_page):
+    """Multiple choice questions offer options; numeric ones offer a box to
+    type the answer into."""
     expect(question_page.get_choose_label()).to_be_visible()
+    expect(question_page.get_answer_controls().first).to_be_visible()
+
+    if question_page.is_numeric_question():
+        expect(question_page.get_numeric_input()).to_be_editable()
+        return
 
     assert question_page.get_options().count() >= 2
     assert question_page.get_option_letters().count() == question_page.get_options().count()

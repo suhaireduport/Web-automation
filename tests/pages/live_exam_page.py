@@ -28,6 +28,16 @@ class LiveExamPage:
     def get_close_button(self):
         return self.page.locator(".ep-close-btn")
 
+    def get_toast(self):
+        """react-hot-toast renders every message into this one container.
+
+        It is always in the DOM and empty until a message fires, so a refused
+        start is read off its text rather than its presence."""
+        return self.page.locator("[data-rht-toaster]")
+
+    def get_toast_text(self):
+        return self.get_toast().inner_text().strip()
+
     # ---------- header ----------
 
     def get_question_counter(self):
@@ -115,6 +125,10 @@ class LiveExamPage:
         return self.page.locator(".ep-choose-num")
 
     # ---------- options ----------
+    #
+    # A question is answered one of two ways: an exam paper carries multiple
+    # choice questions, which offer options, and numeric ones, which offer a
+    # box to type the answer into instead.
 
     def get_options(self):
         return self.page.locator(".ep-option")
@@ -133,6 +147,24 @@ class LiveExamPage:
 
     def is_option_selected(self, index):
         return "ep-option-selected" in self.get_option(index).get_attribute("class")
+
+    # ---------- numeric answers ----------
+
+    def get_numeric_input(self):
+        return self.page.locator(".ep-numeric-input input")
+
+    def is_numeric_question(self):
+        return self.get_numeric_input().count() > 0
+
+    def is_multiple_choice_question(self):
+        return self.get_options().count() > 0
+
+    def answer_numeric(self, value):
+        self.get_numeric_input().fill(str(value))
+
+    def get_answer_controls(self):
+        """Whatever this question offers as a way of answering it."""
+        return self.page.locator(".ep-option, .ep-numeric-input input")
 
     # ---------- actions ----------
 

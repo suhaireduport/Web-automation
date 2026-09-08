@@ -144,6 +144,13 @@ class LeaderboardPage:
                 return index
         return None
 
+    def get_clickable_rows(self):
+        """Only the student's own row is offered as something to tap."""
+        return self.page.locator(".lb-row-clickable")
+
+    def is_row_clickable(self, index):
+        return "lb-row-clickable" in (self.get_row(index).get_attribute("class") or "")
+
     def get_you_tag(self):
         return self.page.locator(".lb-you-tag")
 

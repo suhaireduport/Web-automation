@@ -30,13 +30,13 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import SECOND_STUDENT_MOBILE
 from pages.bookmark_page import BookmarkPage, BookmarkQuestionsPage, BookmarkQuestionPage
 from pages.home_page import HomePage
 from pages.practice_page import start_quick_practice
 from pages.question_library_page import QuestionLibraryPage
 from pages.question_library_section_page import read_section_count, searchable_snippet
 
-MOBILE = "8893963137"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
@@ -65,8 +65,14 @@ NO_QUESTIONS = (
 
 @pytest.fixture
 def page(login_as):
-    """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    """Signed in once per session and replayed, instead of logging in per test.
+
+    The second student, because this file answers practice questions to
+    make its bookmarks and an answered question leaves the pool for good. The
+    main student already carries test_coins.py and test_daily_task_coins.py,
+    which draw on the same pool, so the two are kept apart rather than
+    competing over what is left."""
+    return login_as(SECOND_STUDENT_MOBILE)
 
 
 @pytest.fixture(scope="session")
@@ -84,7 +90,7 @@ def bookmarked(login_session, _bookmark_state):
     if "reason" in _bookmark_state:
         pytest.skip(_bookmark_state["reason"])
 
-    page = login_session(MOBILE)
+    page = login_session(SECOND_STUDENT_MOBILE)
     practice, practised = start_quick_practice(page)
     if practice is None:
         _bookmark_state["reason"] = NO_QUESTIONS
@@ -94,7 +100,7 @@ def bookmarked(login_session, _bookmark_state):
     # bookmarked behind, and the count would then not move.
     if practice.is_bookmarked():
         practice.click_bookmark()
-        page.locator(".tq-bookmark[aria-label='Add bookmark']").wait_for()
+        practice.wait_for_bookmark_state(False)
 
     # Read on a page of its own: the practice cannot be navigated away from and
     # come back to.
@@ -102,7 +108,7 @@ def bookmarked(login_session, _bookmark_state):
 
     with page.expect_response(ADD_API, timeout=REMOVE_TIMEOUT):
         practice.click_bookmark()
-    page.locator(".tq-bookmark[aria-label='Remove bookmark']").wait_for()
+    practice.wait_for_bookmark_state(True)
 
     _bookmark_state.update(practised)
     _bookmark_state.update(
@@ -150,12 +156,12 @@ def own_bookmark(page):
     # second time would move no count at all.
     if practice.is_bookmarked():
         practice.click_bookmark()
-        page.locator(".tq-bookmark[aria-label='Add bookmark']").wait_for()
+        practice.wait_for_bookmark_state(False)
 
     with page.expect_response(ADD_API, timeout=REMOVE_TIMEOUT) as added:
         practice.click_bookmark()
     assert added.value.status == 200, f"bookmark answered {added.value.status}"
-    page.locator(".tq-bookmark[aria-label='Remove bookmark']").wait_for()
+    practice.wait_for_bookmark_state(True)
     question = practice.get_question_text()
 
     # Answer it before leaving, and wait for the answer to be saved. A question

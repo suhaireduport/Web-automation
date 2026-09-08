@@ -8,7 +8,28 @@ BASE_URL = "https://eduport-react.pages.dev"
 LOGIN_URL = f"{BASE_URL}/login"
 OTP_URL = f"{BASE_URL}/otp"
 HOME_URL = f"{BASE_URL}/"
-DEFAULT_OTP = "430582"
+DEFAULT_OTP = "4305"
+
+# The registered students the suite signs in as.
+#
+# STUDENT_MOBILE is the default: every test module signs in as this one unless
+# it has a reason not to.
+#
+# SECOND_STUDENT_MOBILE exists because a few things cannot be shared. An exam
+# attempt cannot be made twice, an answered practice question leaves the pool
+# for good, and asking for a real OTP leaves a live code on the number that
+# blocks the next sign-in. Five modules hold one of those against the second
+# account so they are not spending what the rest of the suite reads, and each
+# says why where it picks the account: test_coins_connections.py (needs both
+# at once), test_otp.py (real OTP sends), test_live_exam.py (spends an exam
+# attempt), test_ql_bookmark.py and test_ql_mistake_book.py (spend practice
+# questions). Nothing else should use it.
+#
+# Numbers belonging to a single test - a throwaway for a fresh signup, an
+# account in a particular subscription state, a string being fed to the login
+# box to check what it accepts - stay in the test that needs them.
+STUDENT_MOBILE = "9876543210"
+SECOND_STUDENT_MOBILE = "8893963137"
 
 # Headless by default because it is much faster. Run with HEADED=1 to watch.
 HEADLESS = os.getenv("HEADED", "").lower() not in ("1", "true", "yes")
@@ -96,6 +117,43 @@ def _dismiss_intro_splash(page):
     splash.wait_for(state="detached")
 
 
+# The login screen carries a country selector and a button that now reads
+# "Send OTP"; the phone box is its only text field.
+#
+# Sending a code is refused while one is still live for that number ("A valid
+# OTP already exists"), which leaves the app on the login screen instead of
+# moving to /otp. A code left by an earlier test clears in well under a minute,
+# so the send is retried rather than treated as a failure.
+SEND_OTP_ATTEMPTS = 4
+SEND_OTP_RETRY_MS = 20000
+
+
+def _sign_in(page, mobile, otp):
+    """Take a fresh page from the login screen through to home, signed in."""
+    for attempt in range(SEND_OTP_ATTEMPTS):
+        page.goto(LOGIN_URL)
+        page.locator(".dl-phone-input").fill(mobile)
+        page.get_by_role("button", name="Send OTP").click()
+        try:
+            page.wait_for_url(OTP_URL, timeout=8000)
+            break
+        except Exception:
+            if attempt == SEND_OTP_ATTEMPTS - 1:
+                raise AssertionError(
+                    f"Send OTP would not go through for {mobile}: a code is "
+                    "still live for it"
+                )
+            page.wait_for_timeout(SEND_OTP_RETRY_MS)
+
+    # The code is four boxes that take keystrokes rather than a value set on
+    # them, and the form submits itself the moment the fourth digit lands -
+    # there is no button to press.
+    page.locator(".otp-box").first.wait_for()
+    page.locator(".otp-box").first.click()
+    page.keyboard.type(otp)
+    page.wait_for_url(HOME_URL)
+
+
 def _signed_in_page(browser, auth_states, contexts, mobile, otp):
     """Open a page already signed in as the given mobile number.
 
@@ -106,13 +164,7 @@ def _signed_in_page(browser, auth_states, contexts, mobile, otp):
     if mobile not in auth_states:
         context = browser.new_context(permissions=["microphone"])
         page = context.new_page()
-        page.goto(LOGIN_URL)
-        page.locator("input").fill(mobile)
-        page.get_by_role("button", name="Continue").click()
-        page.wait_for_url(OTP_URL)
-        for index, digit in enumerate(otp):
-            page.locator("input").nth(index).fill(digit)
-        page.wait_for_url(HOME_URL)
+        _sign_in(page, mobile, otp)
         page.wait_for_timeout(3000)
         auth_states[mobile] = context.storage_state()
         context.close()

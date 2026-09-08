@@ -15,6 +15,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import SECOND_STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.mistake_book_page import (
     MistakeBookPage,
@@ -29,7 +30,6 @@ from pages.question_library_section_page import (
     searchable_snippet,
 )
 
-MOBILE = "8893963137"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
@@ -52,8 +52,13 @@ NEVER_WRONG = (
 
 @pytest.fixture
 def page(login_as):
-    """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    """Signed in once per session and replayed, instead of logging in per test.
+
+    The second student, because this file runs practices until one comes
+    back wrong, spending several questions in a run, and an answered question
+    leaves the pool for good. The main student already carries the coins
+    files, which draw on the same pool."""
+    return login_as(SECOND_STUDENT_MOBILE)
 
 
 @pytest.fixture(scope="session")
@@ -78,7 +83,7 @@ def mistaken(login_session, _mistake_state):
     if "question" in _mistake_state:
         return _mistake_state
 
-    page = login_session(MOBILE)
+    page = login_session(SECOND_STUDENT_MOBILE)
     before = read_section_count(page.context, SECTION_CARD)
 
     for attempt in range(ATTEMPTS):

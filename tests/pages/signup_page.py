@@ -2,130 +2,161 @@ import re
 
 
 class SignupPage:
-    """The profile form a brand new number lands on after verifying its OTP.
+    """The new-user wizard a brand new number lands on after verifying its OTP.
 
-    Board, Class and Course refresh each other, so they have to be chosen in
-    that order and their options re-read after every choice.
+    It is three steps on one route (/new-user), each a ``.nu-step`` that
+    replaces the one before it:
+
+      1. Enter Your Details - full name and a gender pill. Save & Continue
+         stays disabled until both are given.
+      2. Choose Your Class  - a searchable list of classes; tapping one expands
+         it to its courses, and Confirm Class stays disabled until a course is
+         picked. The list is drawn from courses_list and premium_courses.
+      3. Choose Avatar      - a carousel of stock avatars and avatar packs. Skip
+         completes the signup with the default avatar; the account is created by
+         a single POST to profile/update.
+
+    The old single /signup form - date of birth, an avatar grid and Board /
+    Class / Course dropdowns - is gone, and with it the ``.sp-*`` markup.
     """
 
-    URL = "https://eduport-react.pages.dev/signup"
+    URL = "https://eduport-react.pages.dev/new-user"
 
     def __init__(self, page):
         self.page = page
 
     # ---------- page ----------
 
-    def get_page(self):
-        return self.page.locator(".sp-page")
+    def get_step(self):
+        return self.page.locator(".nu-step")
 
-    def get_form(self):
-        return self.page.locator(".sp-form")
+    def get_title(self):
+        """The heading of whichever step is showing."""
+        return self.page.locator(".nu-title")
 
-    def get_fields(self):
-        return self.page.locator(".sp-field")
+    def wait_for_loaded(self, timeout=30000):
+        self.get_step().wait_for(timeout=timeout)
 
-    def get_labels(self):
-        return self.page.locator(".sp-label")
+    # ---------- step 1: details ----------
 
-    def get_field(self, label):
-        """Exact label match, so "Class" does not also hit "Class 11 Science"."""
-        pattern = re.compile(r"^\s*" + re.escape(label) + r"\s*$")
-        return self.get_fields().filter(
-            has=self.page.locator(".sp-label").filter(has_text=pattern)
+    def get_name_input(self):
+        return self.page.locator(".nu-name-input")
+
+    def enter_name(self, name):
+        self.get_name_input().fill(name)
+
+    def get_gender_pills(self):
+        return self.page.locator(".nu-gender-pill")
+
+    def get_selected_gender_pills(self):
+        return self.page.locator(".nu-gender-pill--selected")
+
+    def choose_gender(self, label):
+        """Pick a gender. Matched exactly because "Female" carries "male" as a
+        substring, so a loose match would hit both pills."""
+        self.page.get_by_role("button", name=label, exact=True).click()
+
+    def get_selected_gender(self):
+        """The label of the chosen pill, or None while none is chosen."""
+        pill = self.page.locator(".nu-gender-pill--selected")
+        if not pill.count():
+            return None
+        return pill.locator(".nu-gender-label").inner_text().strip()
+
+    def get_details_cta(self):
+        """Save & Continue, at the foot of step one."""
+        return self.page.locator(".nu-cta-bar button")
+
+    def details_cta_enabled(self):
+        return not self.get_details_cta().is_disabled()
+
+    def submit_details(self):
+        self.get_details_cta().click()
+
+    # ---------- step 2: class and course ----------
+
+    def get_class_search(self):
+        return self.page.locator(".nu-search input")
+
+    def search_class(self, text):
+        self.get_class_search().fill(text)
+
+    def get_class_rows(self):
+        return self.page.locator(".nu-class-row")
+
+    def get_class_names(self):
+        return [name.strip() for name in self.page.locator(".nu-class-name").all_inner_texts()]
+
+    def get_class_tile(self, name):
+        """Exact match on the class name, so "Class 1" does not also hit
+        "Class 10"."""
+        pattern = re.compile(r"^\s*" + re.escape(name) + r"\s*$")
+        return self.get_class_rows().filter(
+            has=self.page.locator(".nu-class-name").filter(has_text=pattern)
         )
 
-    # ---------- avatar ----------
+    def expand_class(self, name):
+        """Open a class to reveal its courses."""
+        self.get_class_tile(name).first.click()
 
-    def get_avatars(self):
-        return self.page.locator(".sp-avatar-option")
+    def get_course_tiles(self):
+        """The course buttons revealed under an expanded class."""
+        return self.page.locator(".nu-course-tile")
 
-    def get_current_avatar(self):
-        return self.page.locator(".sp-current-avatar")
+    def get_course_names(self):
+        return [name.strip() for name in self.get_course_tiles().all_inner_texts()]
 
-    def choose_avatar(self, index):
-        self.get_avatars().nth(index).click()
+    def choose_course(self, title):
+        pattern = re.compile(r"^\s*" + re.escape(title) + r"\s*$")
+        self.get_course_tiles().filter(has_text=pattern).first.click()
 
-    # ---------- text fields ----------
+    def get_selected_course(self):
+        tile = self.page.locator(".nu-course-tile--selected")
+        if not tile.count():
+            return None
+        return tile.inner_text().strip()
 
-    def get_full_name_input(self):
-        return self.page.get_by_placeholder("Enter full name")
+    def get_confirm_class_button(self):
+        return self.page.locator(".nu-class-foot button")
 
-    def enter_full_name(self, name):
-        self.get_full_name_input().fill(name)
+    def confirm_class_enabled(self):
+        return not self.get_confirm_class_button().is_disabled()
 
-    def get_date_of_birth_input(self):
-        return self.page.locator("input[type='date']")
+    def confirm_class(self):
+        self.get_confirm_class_button().click()
 
-    def enter_date_of_birth(self, date_of_birth):
-        self.get_date_of_birth_input().fill(date_of_birth)
+    def get_class_back_button(self):
+        return self.page.locator(".nu-class-head button")
 
-    # ---------- dropdowns ----------
+    # ---------- step 3: avatar ----------
 
-    def get_select(self, label):
-        return self.get_field(label).locator("select")
+    def get_avatar_carousel(self):
+        return self.page.locator(".nu-carousel")
 
-    def get_options(self, label):
-        return self.get_select(label).locator("option")
+    def get_avatar_items(self):
+        return self.page.locator(".nu-carousel-item")
 
-    def get_option_texts(self, label):
-        return [
-            text.strip()
-            for text in self.get_options(label).all_inner_texts()
-            if text.strip()
-        ]
+    def get_avatar_names(self):
+        return [name.strip() for name in self.page.locator(".nu-carousel-name").all_inner_texts()]
 
-    def select_option(self, label, option_text):
-        """Options carry stray whitespace, so match on the trimmed text."""
-        options = self.get_options(label)
-        for index in range(options.count()):
-            option = options.nth(index)
-            if option.inner_text().strip() == option_text:
-                self.get_select(label).select_option(option.get_attribute("value"))
-                return option_text
-        raise AssertionError(f"{label} has no option {option_text!r}")
+    def get_active_avatar_name(self):
+        return self.page.locator(".nu-carousel-item--active .nu-carousel-name").inner_text().strip()
 
-    def select_first_option(self, label):
-        """Pick the first real choice and hand back exactly what was selected,
-        so the caller can assert against it later."""
-        options = self.get_options(label)
-        for index in range(options.count()):
-            option = options.nth(index)
-            text = option.inner_text().strip()
-            value = option.get_attribute("value")
-            if text and value:
-                self.get_select(label).select_option(value)
-                return text
-        raise AssertionError(f"{label} has no selectable option")
+    def choose_avatar(self, name):
+        pattern = re.compile(r"^\s*" + re.escape(name) + r"\s*$")
+        self.get_avatar_items().filter(has_text=pattern).first.click()
 
-    def get_selected_option(self, label):
-        select = self.get_select(label)
-        value = select.input_value()
-        return select.locator(f"option[value='{value}']").inner_text().strip()
+    def get_avatar_packs(self):
+        return self.page.locator(".nu-pack-tile")
 
-    # ---------- gender / board / class / course ----------
+    def get_set_profile_button(self):
+        return self.page.locator(".nu-avatar-cta")
 
-    def get_gender_select(self):
-        return self.get_select("Gender")
+    def set_profile(self):
+        self.get_set_profile_button().click()
 
-    def get_board_select(self):
-        return self.get_select("Board")
+    def get_skip_button(self):
+        return self.page.get_by_text("Skip", exact=True)
 
-    def get_class_select(self):
-        return self.get_select("Class")
-
-    def get_course_select(self):
-        return self.get_select("Course")
-
-    def get_course_options(self):
-        return self.get_option_texts("Course")
-
-    def select_course(self, course_name):
-        return self.select_option("Course", course_name)
-
-    # ---------- submit ----------
-
-    def get_continue_button(self):
-        return self.page.locator(".sp-cta")
-
-    def click_continue(self):
-        self.get_continue_button().click()
+    def skip(self):
+        self.get_skip_button().click()

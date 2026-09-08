@@ -36,6 +36,7 @@ test_coins.py.
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.daily_tasks_page import DailyTasksPage
 from pages.leaderboard_page import (
     LeaderboardPage,
@@ -52,7 +53,6 @@ from pages.practice_page import (
     take_practice_quiz,
 )
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 DAILY_TASKS_API = "**/api/v3/dailytasks/list"
@@ -73,7 +73,7 @@ PRACTICE = "Practice"
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 def take_quiz_once(login_session, state, how):
@@ -89,7 +89,7 @@ def take_quiz_once(login_session, state, how):
     if "completion" in state:
         return state
 
-    page = login_session(MOBILE)
+    page = login_session(STUDENT_MOBILE)
     page.goto(HOME_URL, wait_until="domcontentloaded")
 
     before = read_balance(page)

@@ -4,13 +4,15 @@ Past exam cards are covered in test_past_exam.py and the instructions page in
 test_exam_start.py.
 """
 import re
+from collections import Counter
+
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.exam_page import ExamPage
 
-MOBILE = "9876543210"
 
 EXAMS_URL = "https://eduport-react.pages.dev/exams"
 
@@ -18,7 +20,7 @@ EXAMS_URL = "https://eduport-react.pages.dev/exams"
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture
@@ -114,8 +116,7 @@ def test_upcoming_tab_empty_state(exam_page):
 
 
 def test_exam_list_shows_no_content_when_the_api_fails(page):
-    """The exam list is the only network call in this flow; the instructions
-    page renders entirely from the list payload and the route query string.
+    """The exam list is the only network call this screen makes.
 
     Blocking it leaves the page with neither exams nor an error or empty state,
     so this pins the current behaviour: a blank list body under the heading."""
@@ -151,54 +152,39 @@ def open_exams_with_payload(page):
     return exams_page, answer.value.json()["exams"]
 
 
-def exams_by_title(exams, fields):
-    """The payload keyed by title, carrying only the fields being compared.
+def past_exams_payload(exams_page, exams):
+    """The payload entries the Past tab is showing.
 
-    Two exams on an account can share a title, and a card showing that title
-    cannot then be traced back to one of them - unless both say the same thing
-    about what is being checked, which is what a None here rules out."""
-    keyed = {}
-    for exam in exams:
-        title = exam["title"].strip()
-        wanted = tuple(exam[field] for field in fields)
-        if title in keyed and keyed[title] != wanted:
-            keyed[title] = None
-        else:
-            keyed.setdefault(title, wanted)
-    return keyed
-
-
-def listed_past_exams(exams_page, exams, fields):
-    """The Past tab's titles, with the payload values each one stands for."""
+    Counting what the tab offers does not need any one card traced back to one
+    entry, only the set of entries behind the tab. A title listed as many times
+    as the payload carries it accounts for all of them however they differ; a
+    title the payload carries more often than the tab shows it is being split
+    across tabs, and then there is no telling which of them landed here."""
     exams_page.click_past_tab()
 
     total = exams_page.get_tab_count_value("Past")
     if total == 0:
         pytest.skip("No past exams for this user")
 
-    # The tab being left stays on screen until the new one is built, so the
-    # grid is held at the count the tab claims before any of it is read.
     expect(exams_page.get_exam_cards()).to_have_count(total)
 
-    keyed = exams_by_title(exams, fields)
-    # Read card by card. The title class is used elsewhere on the screen too,
-    # so collecting it in one go picks up more than the cards themselves.
-    shown = [
+    shown = Counter(
         exams_page.get_exam_title(index).inner_text().strip()
         for index in range(total)
-    ]
+    )
+    carried = Counter(exam["title"].strip() for exam in exams)
 
     for title in shown:
-        assert title in keyed, f"{title!r} is listed but not in the exams payload"
+        assert title in carried, f"{title!r} is listed but not in the exams payload"
 
-    unclear = [title for title in shown if keyed[title] is None]
-    if unclear:
+    split = [title for title, count in shown.items() if carried[title] != count]
+    if split:
         pytest.skip(
-            f"{len(unclear)} listed exams share a title with an exam the payload "
-            "describes differently, so no card can be matched to one"
+            f"{len(split)} titles are carried more often by the payload than the "
+            "Past tab shows them, so which of them is listed here is not decidable"
         )
 
-    return shown, keyed
+    return [exam for exam in exams if exam["title"].strip() in shown]
 
 
 def test_exam_tab_counts_add_up_to_the_exams_api(page):
@@ -211,36 +197,75 @@ def test_exam_tab_counts_add_up_to_the_exams_api(page):
 
 
 def test_past_exam_cards_match_the_exams_api(page):
+    """Three flags in the payload decide what a card offers.
+
+    subscription_status is the first gate: without it the exam is padlocked and
+    offers nothing at all. Past that, is_attended chooses the Attempted badge
+    over Attempt, and is_rank_published decides whether an attempted exam gets
+    a Review or only the notice that its result is still to come."""
     exams_page, exams = open_exams_with_payload(page)
-    shown, keyed = listed_past_exams(
-        exams_page, exams, ("is_attended", "subscription_status")
+    listed = past_exams_payload(exams_page, exams)
+
+    def counting(wanted):
+        return sum(
+            1
+            for exam in listed
+            if wanted(
+                exam["is_attended"],
+                exam["is_rank_published"],
+                exam["subscription_status"],
+            )
+        )
+
+    expect(exams_page.get_locked_cards()).to_have_count(
+        counting(lambda attended, published, entitled: not entitled)
     )
-
-    # is_attended decides Review over Attempt, and the badge beside it. An exam
-    # the account is not entitled to offers neither, so the three do not add up
-    # to the number of cards on their own.
-    attended = [title for title in shown if keyed[title][0]]
-    attemptable = [
-        title for title in shown if not keyed[title][0] and keyed[title][1]
-    ]
-
-    expect(exams_page.get_attempted_badges()).to_have_count(len(attended))
-    expect(exams_page.get_review_buttons()).to_have_count(len(attended))
-    expect(exams_page.get_attempt_buttons()).to_have_count(len(attemptable))
+    expect(exams_page.get_attempt_buttons()).to_have_count(
+        counting(lambda attended, published, entitled: entitled and not attended)
+    )
+    expect(exams_page.get_attempted_badges()).to_have_count(
+        counting(lambda attended, published, entitled: entitled and attended)
+    )
+    expect(exams_page.get_review_buttons()).to_have_count(
+        counting(
+            lambda attended, published, entitled: entitled and attended and published
+        )
+    )
+    expect(exams_page.get_result_pending_notices()).to_have_count(
+        counting(
+            lambda attended, published, entitled: entitled
+            and attended
+            and not published
+        )
+    )
 
 
 def test_past_exam_duration_and_marks_match_the_exams_api(page):
+    """What every card advertises, against what the payload carries.
+
+    Compared as two collections rather than card by card: exams on an account
+    can share a title, and a card showing that title cannot be traced back to
+    one of them - but the same titles carrying the same durations and marks,
+    as often as each other, says the whole tab is drawn from the payload."""
     exams_page, exams = open_exams_with_payload(page)
-    shown, keyed = listed_past_exams(
-        exams_page, exams, ("duration_int", "total_mark")
+    listed = past_exams_payload(exams_page, exams)
+
+    # duration_int is seconds on the wire; the card shows whole minutes.
+    carried = Counter(
+        (
+            exam["title"].strip(),
+            exam["duration_int"] // 60,
+            float(exam["total_mark"]),
+        )
+        for exam in listed
+    )
+    shown = Counter(
+        (
+            exams_page.get_exam_title(index).inner_text().strip(),
+            exams_page.get_exam_minutes(index),
+            exams_page.get_exam_marks(index),
+        )
+        for index in range(exams_page.exam_card_count())
     )
 
-    for index, title in enumerate(shown):
-        duration, total_mark = keyed[title]
-        meta = exams_page.get_exam_duration_and_marks(index).inner_text()
-
-        # duration_int is seconds on the wire; the card shows whole minutes.
-        assert f"{duration // 60} Minutes" in meta, (
-            f"{meta!r} does not carry the duration"
-        )
-        assert str(total_mark) in meta, f"{meta!r} does not carry the marks"
+    assert shown == carried

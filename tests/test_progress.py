@@ -46,12 +46,12 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.chapter_page import ChapterPage
 from pages.topic_page import TopicPage
 from pages.subtopic_page import SubtopicPage
 
-MOBILE = "9876543210"
 OTP = "430582"
 
 HOME_URL = "https://eduport-react.pages.dev/"
@@ -104,7 +104,7 @@ CHAPTER_COMPLETION_LIMIT = 20
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture(scope="session")
@@ -117,7 +117,7 @@ def content_survey(login_session):
     the whole run, and only at the first few subjects and the first few
     unlocked chapters of each, because a course carries far more than the
     answer needs."""
-    page = login_session(MOBILE)
+    page = login_session(STUDENT_MOBILE)
 
     home = HomePage(page)
     home.get_subjects().first.wait_for()

@@ -18,6 +18,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.practice_page import AddTopicsPage, PracticeConfigPage, PracticeQuestionPage
 from pages.question_library_page import QuestionLibraryPage
@@ -30,7 +31,6 @@ from pages.question_library_subject_page import (
     SubjectSearchPage,
 )
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
@@ -44,7 +44,7 @@ NO_SUBJECTS = (
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture
@@ -558,9 +558,7 @@ def test_practice_now_opens_the_topic_picker_for_that_chapter(
     expect(topic_picker.get_title()).to_have_text("Add topics")
 
     expect(page).to_have_url(re.compile(re.escape(recommended.replace(" ", "%20"))))
-    expect(page.locator(".atp-chapter-open .atp-chapter-title")).to_have_text(
-        recommended
-    )
+    expect(topic_picker.get_open_chapter_title()).to_have_text(recommended)
 
 
 # ---------------------------------------------------------------------------

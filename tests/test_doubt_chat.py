@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.doubt_chat_page import DoubtChatPage
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 CHAT_URL = "https://eduport-react.pages.dev/ai/doubt-clearance"
@@ -17,7 +17,7 @@ SAMPLE_IMAGE = str(Path(__file__).parent / "data" / "doubt_question.png")
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture

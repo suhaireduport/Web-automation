@@ -25,6 +25,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.exam_page import ExamPage, ExamResultPage, ExamReviewPage
 from pages.home_page import HomePage
 from pages.question_library_exams_page import (
@@ -35,7 +36,6 @@ from pages.question_library_exams_page import (
 from pages.question_library_page import QuestionLibraryPage
 from pages.question_library_section_page import searchable_snippet
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 EXAMS_URL = ExamPage.URL
@@ -66,7 +66,7 @@ NO_ATTEMPTED_EXAM = (
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ def mark_one_exam(page, index, with_note):
         with page.expect_response(ADD_API, timeout=API_TIMEOUT) as added:
             review.click_bookmark()
         assert added.value.status == 200, f"bookmark answered {added.value.status}"
-        page.locator(".erp-bookmark[aria-label='Remove bookmark']").wait_for()
+        review.wait_for_bookmark_state(True)
 
     marked = {
         "exam": title,
@@ -152,14 +152,10 @@ def marked_questions(login_session, _exam_state):
         yield _exam_state
         return
 
-    page = login_session(MOBILE)
+    page = login_session(STUDENT_MOBILE)
     exams = open_past_exams(page)
 
-    attempted = [
-        index
-        for index in range(exams.exam_card_count())
-        if exams.get_review_button(index).count() > 0
-    ]
+    attempted = exams.find_reviewable_exams()
     if not attempted:
         _exam_state["reason"] = NO_ATTEMPTED_EXAM
         pytest.skip(NO_ATTEMPTED_EXAM)

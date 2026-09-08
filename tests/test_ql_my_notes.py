@@ -14,11 +14,11 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.my_notes_page import MyNotesPage, NoteQuestionsPage, NoteQuestionPage
 from pages.question_library_page import QuestionLibraryPage
 
-MOBILE = "9876543210"
 
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
 MY_NOTES_URL = MyNotesPage.URL
@@ -32,7 +32,7 @@ NO_NOTES = (
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture

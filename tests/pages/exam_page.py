@@ -106,6 +106,16 @@ class ExamPage:
     def get_exam_duration_and_marks(self, index):
         return self.get_exam_meta_rows(index).nth(1)
 
+    def get_exam_minutes(self, index):
+        """The whole minutes the card advertises: '15 Minutes 0.0 Marks' -> 15."""
+        text = self.get_exam_duration_and_marks(index).inner_text()
+        return int(re.search(r"(\d+)\s*Minutes", text).group(1))
+
+    def get_exam_marks(self, index):
+        """The marks the card advertises: '15 Minutes 0.0 Marks' -> 0.0."""
+        text = self.get_exam_duration_and_marks(index).inner_text()
+        return float(re.search(r"([\d.]+)\s*Marks", text).group(1))
+
     # ---------- attempt ----------
 
     def get_attempt_buttons(self):
@@ -117,10 +127,45 @@ class ExamPage:
     def click_attempt(self, index=0):
         self.get_attempt_button(index).click()
 
+    def find_unattempted_exams(self):
+        """Every index still offering Attempt, in the order they are listed."""
+        return [
+            i for i in range(self.exam_card_count())
+            if self.get_attempt_button(i).count() > 0
+        ]
+
+    def find_unattempted_exam(self):
+        """Index of the first exam still offering Attempt, or None."""
+        return next(iter(self.find_unattempted_exams()), None)
+
     # ---------- attempted exams ----------
+    #
+    # An attempted exam always carries the Attempted badge, but it only offers
+    # Review once its result has been published. Until then the card shows the
+    # badge and a "result will be published soon" notice instead, so being
+    # attempted and being reviewable are two different things.
 
     def get_attempted_badges(self):
         return self.page.locator(".ex-badge-attended")
+
+    def get_attempted_badge(self, index):
+        return self.get_exam_card(index).locator(".ex-badge-attended")
+
+    def is_exam_attempted(self, index):
+        return self.get_attempted_badge(index).count() > 0
+
+    def find_attempted_exams(self):
+        """Every index carrying the Attempted badge."""
+        return [
+            i for i in range(self.exam_card_count())
+            if self.get_attempted_badge(i).count() > 0
+        ]
+
+    def find_attempted_exam(self):
+        """Index of the first exam carrying the Attempted badge, or None."""
+        return next(iter(self.find_attempted_exams()), None)
+
+    # ---------- results ----------
 
     def get_review_buttons(self):
         return self.page.locator(".ex-review-btn")
@@ -131,25 +176,26 @@ class ExamPage:
     def click_review(self, index):
         self.get_review_button(index).click()
 
-    def get_attempted_badge(self, index):
-        return self.get_exam_card(index).locator(".ex-badge-attended")
+    def get_result_pending_notices(self):
+        """An attempted exam whose result has not been published yet."""
+        return self.page.locator(".ex-result-pending")
 
-    def is_exam_attempted(self, index):
-        return self.get_attempted_badge(index).count() > 0
+    def get_result_pending_notice(self, index):
+        return self.get_exam_card(index).locator(".ex-result-pending")
 
-    def find_unattempted_exam(self):
-        """Index of the first exam still offering Attempt, or None."""
-        for i in range(self.exam_card_count()):
-            if self.get_attempt_button(i).count() > 0:
-                return i
-        return None
+    def is_result_pending(self, index):
+        return self.get_result_pending_notice(index).count() > 0
 
-    def find_attempted_exam(self):
-        """Index of the first exam already attempted, or None."""
-        for i in range(self.exam_card_count()):
-            if self.get_review_button(i).count() > 0:
-                return i
-        return None
+    def find_reviewable_exams(self):
+        """Every index whose result is published, so it offers Review."""
+        return [
+            i for i in range(self.exam_card_count())
+            if self.get_review_button(i).count() > 0
+        ]
+
+    def find_reviewable_exam(self):
+        """Index of the first exam offering Review, or None."""
+        return next(iter(self.find_reviewable_exams()), None)
 
     # ---------- start confirmation ----------
     # A live exam warns before it lets you through to the instructions page.
@@ -194,20 +240,22 @@ class ExamPage:
     def is_exam_locked(self, index):
         return self.get_lock_badge(index).count() > 0
 
+    def find_locked_exams(self):
+        """Every index the account is not entitled to."""
+        return [i for i in range(self.exam_card_count()) if self.is_exam_locked(i)]
+
     def find_locked_exam(self):
         """Index of the first locked exam, or None."""
-        for i in range(self.exam_card_count()):
-            if self.is_exam_locked(i):
-                return i
-        return None
+        return next(iter(self.find_locked_exams()), None)
 
     # ---------- loading ----------
 
     def get_loading_indicator(self):
-        """Whatever the page shows while the exam list is still in flight."""
-        return self.page.locator(
-            ".ex-loading, .ex-skeleton, [class*='skeleton'], [class*='spinner']"
-        )
+        """What the page shows while the exam list is still in flight."""
+        return self.page.locator(".ex-loading")
+
+    def get_loading_spinner(self):
+        return self.page.locator(".ex-spinner")
 
     # ---------- empty state ----------
 
@@ -224,6 +272,9 @@ class ExamInstructionsPage:
 
     def get_page(self):
         return self.page.locator(".ei-page")
+
+    def wait_for_loaded(self):
+        self.get_start_exam_button().wait_for()
 
     def get_header_title(self):
         return self.page.locator(".ei-title")
@@ -249,6 +300,9 @@ class ExamInstructionsPage:
     def get_duration(self):
         return self.get_stat_value("Duration")
 
+    def get_duration_text(self):
+        return self.get_duration().inner_text().strip()
+
     def get_total_questions_count(self):
         return int(self.get_total_questions().inner_text().strip())
 
@@ -273,6 +327,9 @@ class ExamInstructionsPage:
     def click_start_exam(self):
         self.get_start_exam_button().click()
 
+    def is_start_enabled(self):
+        return self.get_start_exam_button().is_enabled()
+
     # ---------- feedback ----------
 
     def get_toast(self):
@@ -282,9 +339,8 @@ class ExamInstructionsPage:
         so assert on its text rather than its presence."""
         return self.page.locator("[data-rht-toaster]")
 
-    def get_error_message(self):
-        """Any inline error the page renders for a start that cannot proceed."""
-        return self.page.locator(".ei-error, .ei-message, [class*='error']")
+    def get_toast_text(self):
+        return self.get_toast().inner_text().strip()
 
 
 class ExamResultPage:
@@ -311,6 +367,10 @@ class ExamResultPage:
 
     def get_exam_date(self):
         return self.page.locator(".er-exam-date")
+
+    def get_info_banner(self):
+        """The note the result carries about how the attempt was counted."""
+        return self.page.locator(".er-info-banner")
 
     def wait_for_loaded(self):
         self.get_review_button().wait_for()
@@ -481,6 +541,17 @@ class ExamReviewPage:
 
     def click_bookmark(self):
         self.get_bookmark_button().click()
+
+    def wait_for_bookmark_state(self, bookmarked, timeout=15000):
+        """Hold until the control shows the state asked for.
+
+        The button flips as soon as it is pressed, so its own look proves
+        nothing; this waits for the label the screen settles on once the call
+        behind it has come back."""
+        label = "Remove bookmark" if bookmarked else "Add bookmark"
+        self.page.locator(f".erp-bookmark[aria-label='{label}']").wait_for(
+            timeout=timeout
+        )
 
     # ---------- note ----------
 

@@ -2,15 +2,18 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 
-MOBILE = "8893963137"
+# A non-premium account: the Contact Us card is only offered to one, so it
+# cannot be checked on either of the students the rest of the suite signs in as.
+NON_PREMIUM_MOBILE = "5555555551"
 
 
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 def test_home_page(page):
@@ -123,7 +126,7 @@ def test_subject_open(page):
     expect(page).to_have_url(re.compile(r"https://eduport-react\.pages\.dev/home/subject/.*"))
 
 def test_resource_open(login_as):
-    page = login_as("9876543210")
+    page = login_as(STUDENT_MOBILE)
 
     home_page = HomePage(page)
 
@@ -267,7 +270,7 @@ def test_mini_player_close(page):
     expect(mini_player).to_be_hidden()
 
 def test_contact_us_card_for_non_premium_user(login_as):
-    page = login_as("5555555551")
+    page = login_as(NON_PREMIUM_MOBILE)
 
     home_page = HomePage(page)
 

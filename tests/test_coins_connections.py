@@ -32,6 +32,7 @@ carries, rather than by guessing at names:
 import pytest
 from playwright.sync_api import expect
 
+from conftest import SECOND_STUDENT_MOBILE, STUDENT_MOBILE
 from pages.leaderboard_page import LeaderboardPage, call_api, read_coin_log
 from pages.streak_page import StreakPage
 
@@ -39,8 +40,8 @@ from pages.streak_page import StreakPage
 # suite runs. They are different accounts because an exam attempt cannot be
 # made twice and the one that has made one is not the one with questions left
 # to practise.
-EXAMS_MOBILE = "8893963137"
-EARNING_MOBILE = "9876543210"
+EXAMS_MOBILE = SECOND_STUDENT_MOBILE
+EARNING_MOBILE = STUDENT_MOBILE
 
 STREAK_API = "**/api/v3/analytics/streak/now"
 

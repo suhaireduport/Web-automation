@@ -28,6 +28,7 @@ file is only about the balance those payments land in.
 import re
 import pytest
 
+from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.daily_tasks_page import DailyTasksPage
 from pages.analytics_page import AnalyticsPage
@@ -40,7 +41,6 @@ from pages.leaderboard_page import (
 )
 from pages.practice_page import CORRECT, take_practice_quiz
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
 
@@ -50,7 +50,7 @@ NOTHING_TO_PRACTISE = "No topic on this account has a question left to practise"
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 def digits(text):
@@ -239,7 +239,7 @@ def earning(login_session, _earning_state):
     if "paid" in _earning_state:
         return _earning_state
 
-    page = login_session(MOBILE)
+    page = login_session(STUDENT_MOBILE)
     page.goto(HOME_URL, wait_until="domcontentloaded")
 
     before = read_balance(page)

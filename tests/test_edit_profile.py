@@ -10,14 +10,16 @@ import string
 import pytest
 from playwright.sync_api import expect
 
+from conftest import STUDENT_MOBILE
 from pages.edit_profile_page import EditProfilePage
 from pages.home_page import HomePage
-from pages.profile_menu_page import ProfileMenuPage
+from pages.profile_page import ProfilePage
 
-MOBILE = "9876543210"
 
 HOME_URL = "https://eduport-react.pages.dev/"
+PROFILE_URL = "https://eduport-react.pages.dev/profile"
 EDIT_PROFILE_URL = EditProfilePage.URL
+PROFILE_UPDATE_API = "**/api/v3/profile/update"
 
 
 def random_name():
@@ -40,10 +42,31 @@ def displayed_name(home_page):
     return home_page.get_greeting().inner_text().replace("Hello,", "").strip()
 
 
+def save_profile(page, edit_page):
+    """Save and wait for the write to land.
+
+    Save no longer always returns to home: it goes back to whichever screen Edit
+    was opened from, which on the normal path is the Profile page. So the update
+    call is waited on rather than a destination URL, and a test navigates itself
+    to wherever it wants to read the result."""
+    with page.expect_response(PROFILE_UPDATE_API) as answer:
+        edit_page.click_save()
+    assert answer.value.status == 200, f"profile/update answered {answer.value.status}"
+
+
+def home_fresh(page):
+    """Home loaded from scratch, so its greeting and course badge carry the
+    saved profile rather than a stale render."""
+    page.goto(HOME_URL, wait_until="domcontentloaded")
+    home = HomePage(page)
+    home.get_subjects().first.wait_for()
+    return home
+
+
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
-    return login_as(MOBILE)
+    return login_as(STUDENT_MOBILE)
 
 
 @pytest.fixture
@@ -69,13 +92,17 @@ def current_profile(home_page):
 
 @pytest.fixture
 def edit_page(home_page, current_profile):
-    """Opened the way a user reaches it, through the profile menu.
+    """Opened the way a user reaches it now: the avatar opens the Profile page,
+    and the pencil on the avatar there opens Edit Details.
 
     The form is filled in from the profile a moment after the page renders, and
     that arrives late enough to overwrite anything typed first, so wait for the
     saved name to land before handing the page over."""
     home_page.open_profile_menu()
-    ProfileMenuPage(home_page.page).click_item("Edit details")
+
+    profile_page = ProfilePage(home_page.page)
+    profile_page.wait_for_loaded()
+    profile_page.open_edit_details()
 
     edit_page = EditProfilePage(home_page.page)
     expect(edit_page.get_page()).to_be_visible()
@@ -102,9 +129,7 @@ def restore_profile(home_page, current_profile):
     expect(edit_page.get_full_name_input()).not_to_have_value("")
     edit_page.enter_full_name(original_name)
     edit_page.select_course(original_course)
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
-    page.reload()
+    save_profile(page, edit_page)
 
 
 # ---------------------------------------------------------------------------
@@ -175,36 +200,54 @@ def test_changing_the_name_updates_the_home_greeting(page, edit_page, restore_pr
     new_name = random_name()
 
     edit_page.enter_full_name(new_name)
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
-    page.reload()
+    save_profile(page, edit_page)
 
-    expect(HomePage(page).get_greeting()).to_have_text(f"Hello, {new_name}")
+    expect(home_fresh(page).get_greeting()).to_have_text(f"Hello, {new_name}")
 
 
 # ---------------------------------------------------------------------------
-# Scenario:   the greeting keeps up with a save on its own
-# Pre:        the edit page is open
+# Scenario:   Save drops back onto the Profile page showing the new name
+# Pre:        the edit page is open (reached through the Profile page)
 # Steps:      type a new name, Save
-# Expected:   the greeting home returns to shows the name just saved
-#
-# Known defect: the profile is stored correctly, but home is not refreshed with
-# it. The greeting, the profile menu and localStorage all keep the previous
-# name until the next full load. Left as xfail so the suite stays green and
-# this reports XPASS the moment the app starts refreshing.
+# Expected:   the app returns to /profile and it already carries the new name,
+#             with no manual reload
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    reason="Saving a name does not refresh home; the old name shows until reload",
-)
-def test_home_greeting_updates_without_a_reload(page, edit_page, restore_profile):
+def test_saving_returns_to_the_profile_page(page, edit_page, restore_profile):
     new_name = random_name()
 
     edit_page.enter_full_name(new_name)
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
+    save_profile(page, edit_page)
 
-    expect(HomePage(page).get_greeting()).to_have_text(f"Hello, {new_name}")
+    expect(page).to_have_url(PROFILE_URL)
+    ProfilePage(page).wait_for_loaded()
+
+
+# ---------------------------------------------------------------------------
+# Scenario:   the Profile page refreshes itself after a save
+# Pre:        the edit page is open
+# Steps:      save a new name, read the Profile page it drops back onto
+# Expected:   the page shows the name just saved
+#
+# Known defect: the profile is stored correctly, but the Profile page Save
+# returns to still shows the previous name until the next full load. Left as
+# xfail so the suite stays green and this reports XPASS the moment the app
+# starts refreshing. Persistence itself is covered by the reload tests below.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.xfail(
+    reason="Save returns to the Profile page without refreshing it; the old "
+    "name shows until a reload",
+)
+def test_the_profile_view_refreshes_after_a_save(page, edit_page, restore_profile):
+    new_name = random_name()
+
+    edit_page.enter_full_name(new_name)
+    save_profile(page, edit_page)
+
+    profile_page = ProfilePage(page)
+    profile_page.wait_for_loaded()
+    expect(profile_page.get_name()).to_have_text(new_name)
 
 
 # ---------------------------------------------------------------------------
@@ -218,8 +261,7 @@ def test_changed_name_is_kept_in_the_edit_form(page, edit_page, restore_profile)
     new_name = random_name()
 
     edit_page.enter_full_name(new_name)
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
+    save_profile(page, edit_page)
 
     page.goto(EDIT_PROFILE_URL)
 
@@ -233,19 +275,18 @@ def test_changed_name_is_kept_in_the_edit_form(page, edit_page, restore_profile)
 # Expected:   the menu names the user by the new name
 # ---------------------------------------------------------------------------
 
-def test_changed_name_shows_in_the_profile_menu(page, edit_page, restore_profile):
+def test_changed_name_shows_on_the_profile_page(page, edit_page, restore_profile):
     new_name = random_name()
 
     edit_page.enter_full_name(new_name)
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
-    page.reload()
+    save_profile(page, edit_page)
 
-    home_page = HomePage(page)
-    home_page.get_subjects().first.wait_for()
-    home_page.open_profile_menu()
-
-    expect(ProfileMenuPage(page).get_user_name()).to_have_text(new_name)
+    # Reopened from scratch, so this is the stored name rather than the render
+    # left behind by the save.
+    page.goto(PROFILE_URL, wait_until="domcontentloaded")
+    profile_page = ProfilePage(page)
+    profile_page.wait_for_loaded()
+    expect(profile_page.get_name()).to_have_text(new_name)
 
 
 # ---------------------------------------------------------------------------
@@ -256,16 +297,16 @@ def test_changed_name_shows_in_the_profile_menu(page, edit_page, restore_profile
 # ---------------------------------------------------------------------------
 
 def test_changing_the_course_updates_the_home_course_badge(page, edit_page, restore_profile):
+    if len(edit_page.get_course_options()) < 2:
+        pytest.skip("This account has only one course to choose from")
+
     previous_course = edit_page.get_current_course()
     new_course = edit_page.select_other_option("Course")
     assert new_course != previous_course
 
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
+    save_profile(page, edit_page)
 
-    home_page = HomePage(page)
-
-    expect(home_page.get_course_button()).to_have_text(new_course)
+    expect(home_fresh(page).get_course_button()).to_have_text(new_course)
 
 
 # ---------------------------------------------------------------------------
@@ -276,15 +317,16 @@ def test_changing_the_course_updates_the_home_course_badge(page, edit_page, rest
 # ---------------------------------------------------------------------------
 
 def test_changing_name_and_course_together_shows_both_on_home(page, edit_page, restore_profile):
+    if len(edit_page.get_course_options()) < 2:
+        pytest.skip("This account has only one course to choose from")
+
     new_name = random_name()
     new_course = edit_page.select_other_option("Course")
     edit_page.enter_full_name(new_name)
 
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
+    save_profile(page, edit_page)
 
-    home_page = HomePage(page)
-
+    home_page = home_fresh(page)
     expect(home_page.get_greeting()).to_have_text(f"Hello, {new_name}")
     expect(home_page.get_course_button()).to_have_text(new_course)
 
@@ -300,11 +342,9 @@ def test_saving_without_changes_leaves_the_profile_alone(page, edit_page):
     name = edit_page.get_full_name()
     course = edit_page.get_current_course()
 
-    edit_page.click_save()
-    page.wait_for_url(HOME_URL, timeout=30000)
+    save_profile(page, edit_page)
 
-    home_page = HomePage(page)
-
+    home_page = home_fresh(page)
     expect(home_page.get_greeting()).to_have_text(f"Hello, {name}")
     expect(home_page.get_course_button()).to_have_text(course)
 
@@ -321,10 +361,10 @@ def test_leaving_without_saving_discards_the_change(page, edit_page):
     edit_page.enter_full_name(random_name())
 
     edit_page.click_back()
-    page.wait_for_url(HOME_URL, timeout=30000)
-    page.reload()
 
-    expect(HomePage(page).get_greeting()).to_have_text(f"Hello, {saved_name}")
+    # Back returns to the Profile page now, not home; home is loaded fresh to
+    # confirm the discarded change never reached the profile.
+    expect(home_fresh(page).get_greeting()).to_have_text(f"Hello, {saved_name}")
 
 
 # ---------------------------------------------------------------------------
