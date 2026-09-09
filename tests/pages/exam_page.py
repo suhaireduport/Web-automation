@@ -26,6 +26,10 @@ class ExamPage:
         renders. Either the card grid or the empty state shows up once loaded."""
         self.page.locator(".ex-grid, .ex-empty").first.wait_for()
 
+    def get_course_button(self):
+        """The course switcher in the app bar, the same badge home carries."""
+        return self.page.locator(".hp-course-badge")
+
     # ---------- tabs ----------
 
     def get_tabs(self):

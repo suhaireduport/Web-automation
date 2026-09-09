@@ -18,12 +18,13 @@ DEFAULT_OTP = "4305"
 # SECOND_STUDENT_MOBILE exists because a few things cannot be shared. An exam
 # attempt cannot be made twice, an answered practice question leaves the pool
 # for good, and asking for a real OTP leaves a live code on the number that
-# blocks the next sign-in. Five modules hold one of those against the second
+# blocks the next sign-in. Six modules hold one of those against the second
 # account so they are not spending what the rest of the suite reads, and each
 # says why where it picks the account: test_coins_connections.py (needs both
 # at once), test_otp.py (real OTP sends), test_live_exam.py (spends an exam
-# attempt), test_ql_bookmark.py and test_ql_mistake_book.py (spend practice
-# questions). Nothing else should use it.
+# attempt), test_ql_bookmark.py, test_ql_mistake_book.py and
+# test_practice_questions.py (spend practice questions). Nothing else should
+# use it.
 #
 # Numbers belonging to a single test - a throwaway for a fresh signup, an
 # account in a particular subscription state, a string being fed to the login

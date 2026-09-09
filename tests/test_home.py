@@ -35,15 +35,9 @@ def test_search_page(page):
     expect(search_button).to_be_visible()
 
 
-def test_course_switch_page(page):
-
-
-    home_page = HomePage(page)
-
-    course_button = home_page.get_course_button()
-    page.wait_for_timeout(2000)
-    
-    expect(course_button).to_be_visible()
+# The course badge in the header used to be checked here for nothing but being
+# visible. It is the entry to the course switcher, and everything it does -
+# including being on screen on this page - is now in test_course_switch.py.
 
 def test_profile_button(page):
 

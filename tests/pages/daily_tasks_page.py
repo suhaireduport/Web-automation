@@ -30,6 +30,10 @@ class DailyTasksPage:
     def get_page_title(self):
         return self.page.locator(".dt-page-title")
 
+    def get_course_button(self):
+        """The course switcher in the app bar, the same badge home carries."""
+        return self.page.locator(".hp-course-badge")
+
     # ---------- header stats ----------
 
     def get_stat_chips(self):

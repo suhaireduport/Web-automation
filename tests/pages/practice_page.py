@@ -130,17 +130,20 @@ class AddTopicsPage:
     def select_topic(self, chapter_index, topic_index):
         self.get_topic(chapter_index, topic_index).click()
 
-    def select_practicable_topic(self):
+    def select_practicable_topic(self, minimum=1):
         """Pick the first topic that still has questions left to practise.
 
         A topic whose questions have all been answered cannot be practised, and
         which topics those are changes as the account is used, so the topic is
         found rather than fixed. Returns the chapter and topic titles chosen so
-        a test can look for them again in the Question Library."""
+        a test can look for them again in the Question Library.
+
+        minimum is how many questions the topic has to have left: a set of more
+        than one is only offered by a topic that can fill it."""
         for chapter_index in range(self.chapter_count()):
             self.open_chapter(chapter_index)
             for topic_index in range(self.get_topics(chapter_index).count()):
-                if self.get_remaining_questions(chapter_index, topic_index) < 1:
+                if self.get_remaining_questions(chapter_index, topic_index) < minimum:
                     continue
                 chapter = self.get_chapter_title(chapter_index).inner_text().strip()
                 # Topics are numbered here and nowhere else, so the number is
@@ -556,19 +559,20 @@ def open_practice_from_home(page):
     return add_topics
 
 
-def start_quick_practice(page, questions=1):
+def start_quick_practice(page, questions=1, minimum=1):
     """Subject -> topic -> topic quiz, all the way to the first question.
 
     Hands back the question page and what was practised, so a test can find the
     same question again in the Question Library. questions is what to ask the
     setup screen for; it is offered only as many as the topic has left, so a
-    topic with fewer keeps its own default.
+    topic with fewer keeps its own default. minimum is how many questions the
+    topic picked has to have left.
 
     Returns (None, None) when no topic on the account has a question left to
     practise, which is a test data problem rather than a failure."""
     add_topics = open_practice_from_home(page)
     subject = add_topics.get_active_subject()
-    chapter, topic = add_topics.select_practicable_topic()
+    chapter, topic = add_topics.select_practicable_topic(minimum=minimum)
     if topic is None:
         return None, None
     add_topics.click_continue()
