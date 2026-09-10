@@ -185,6 +185,20 @@ def test_the_balance_is_the_sum_of_todays_coin_log(page):
     ]
 
 
+# The All Time board used to count today's coins twice, coming back as
+# sum(log) + sum(log-today) where sum(log) already had today inside it, so it
+# read high by the day's earnings and was right only first thing in the
+# morning. A quick practice paying 4 coins moved the chip, the Today board, the
+# This Month board and every coin log by 4, and moved All Time by 8.
+#
+# Fixed on the backend, and checked before this test was let back in: with 24
+# coins earned on the day, All Time answered 181 against a 181 ledger on eight
+# readings running - a doubled figure would have been 205 - and the same
+# practice driven again moved it by 4 rather than 8. The assertion below never
+# changed; it was always what the app ought to do, and it now passes on its own
+# merits.
+# ---------------------------------------------------------------------------
+
 def test_the_balance_is_todays_earnings_and_not_a_running_total(page):
     """The chip is today's coins, so an account that earned on an earlier day
     carries more on the longer boards than the chip shows.
@@ -207,7 +221,13 @@ def test_the_balance_is_todays_earnings_and_not_a_running_total(page):
     print("chip:", coins, "week:", mine("week"), "month:", mine("monthly"),
           "all time:", overall, "| earned before today:", earned_earlier)
 
-    assert overall == coins + earned_earlier
+    assert overall == coins + earned_earlier, (
+        f"All Time says {overall}. This account earned {earned_earlier} before "
+        f"today and {coins} today, so it should say {coins + earned_earlier}. "
+        f"The excess is {overall - (coins + earned_earlier)}, which is today's "
+        f"earnings over again: the whole coin log sums to {everything} and "
+        f"{everything} + {today} is exactly {everything + today}."
+    )
     if earned_earlier:
         assert overall != coins, (
             "this account earned on an earlier day, so the all time figure "

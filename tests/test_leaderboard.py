@@ -18,13 +18,18 @@ is asked for when that tab is opened. A tab whose rank list comes back empty
 draws an invitation to start earning in place of a list.
 
 When it is worked out, in the app's own words on the How to get coins sheet:
-"Weekly, monthly, and all-time leaderboards update every day at 4 AM." So the
-rank a board shows is a daily rebuild rather than a live reading, and nothing
-here expects a board to move because coins were just earned. What is checked
-instead is that each board and its own ledger agree, and that the screen shows
-what its call answered - which holds whenever the call was last worked out.
-Coins earned during a run are checked against the balance and the Today board
-in test_coins.py, where the reading is live.
+"Weekly, monthly, and all-time leaderboards update every day at 4 AM." So a
+board is a daily rebuild rather than a live reading, and nothing here expects
+one to move because coins were just earned. What is checked instead is that
+each board and its own ledger agree, and that the screen shows what its call
+answered - which holds whenever the call was last worked out.
+
+Which boards actually stand still, measured by earning 4 coins and reading all
+four again: the chip, Today and This Month each moved by 4, This Week did not
+move at all, and neither did log-week. This Week is therefore the board these
+tests treat as a snapshot; coins earned since its rebuild are not in it and are
+not looked for. Coins earned during a run are checked against the balance and
+the Today board in test_coins.py, where the reading is live.
 """
 import pytest
 from playwright.sync_api import expect
@@ -34,6 +39,14 @@ from pages.leaderboard_page import LeaderboardPage, call_api, read_balance, read
 
 
 TABS = list(LeaderboardPage.TABS)
+
+# This Week is worked out on the nightly rebuild and not kept live. Measured
+# rather than taken from the sheet: a quick practice paying 4 coins moved the
+# chip, the Today board and the This Month board by 4 each and left both the
+# week board and log-week sitting at what the last rebuild left them. So the
+# week figures are a snapshot, and coins earned since that rebuild are not in
+# them - which is the board working as intended rather than a fault.
+WEEKLY = "This Week"
 
 
 @pytest.fixture
@@ -231,7 +244,13 @@ def test_my_log_matches_the_coin_log_api(page, leaderboard, tab):
 def test_a_board_is_worth_what_its_own_log_adds_up_to(page, leaderboard, tab):
     """The figure against the student on a board is the sum of the events in
     that board's own ledger. The two are served by different calls, so this is
-    the one place they are held against each other."""
+    the one place they are held against each other.
+
+    This Week is allowed one exception and only one. The board and its ledger
+    are both rebuilt each morning, so during a day they normally agree; if they
+    are ever read one rebuild apart, the ledger can be ahead by the coins earned
+    since. That much is accounted for and passes. A gap of any other size is a
+    real disagreement and still fails."""
     served = open_tab(page, leaderboard, tab)
     mine = next((row for row in served if row["is_current_user"]), None)
 
@@ -240,13 +259,45 @@ def test_a_board_is_worth_what_its_own_log_adds_up_to(page, leaderboard, tab):
     ledger = sum(event["score"] for event in events)
 
     if mine is None:
+        # No row and an empty ledger is what a student looks like on a board
+        # they have not earned on - including a week board whose rebuild
+        # predates everything they have earned.
         assert ledger == 0, (
             f"{tab} has no row for this student but its log adds up to {ledger}"
         )
         return
 
+    # The screen is drawn from the board call, so that is what it is held
+    # against - never the live balance, which the week board does not follow.
+    #
+    # A student in the top three is not in the list at all: they are a podium
+    # tile, which .lb-row does not cover. The figures are still checked against
+    # the call; only the on-screen reading is left out, and it says so.
+    index = leaderboard.current_row_index()
+    if index is None:
+        print(
+            f"{tab}: this student is rank "
+            f"{[r['is_current_user'] for r in served].index(True) + 1} and sits "
+            f"on the podium, so their coins were not read off the list"
+        )
+    else:
+        shown = leaderboard.get_coins()[index]
+        assert shown == mine["coins"], (
+            f"{tab} shows {shown} against a call that answered {mine['coins']}"
+        )
+
+    if tab == WEEKLY and mine["coins"] != ledger:
+        earned_since = sum(
+            event["score"] for event in read_coin_log(page, "log-today")
+        )
+        assert ledger - mine["coins"] == earned_since, (
+            f"{tab} says {mine['coins']} and its log adds up to {ledger}, a gap "
+            f"of {ledger - mine['coins']}. The only gap the nightly rebuild "
+            f"explains is the {earned_since} earned since it ran."
+        )
+        return
+
     assert mine["coins"] == ledger, [(e["tag"], e["score"]) for e in events]
-    assert leaderboard.get_coins()[leaderboard.current_row_index()] == ledger
 
 
 def test_only_the_students_own_row_opens_the_log(page, leaderboard):

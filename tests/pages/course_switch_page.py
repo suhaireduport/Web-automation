@@ -12,6 +12,10 @@ COURSE_UPDATE_API = "**/api/v3/course/update"
 PREMIUM_COURSES_API = "**/api/v3/premium_courses"
 COURSES_LIST_API = "**/api/v3/courses_list"
 
+# How long to give the list to narrow to a search before deciding the course
+# is not there because its class is still shut.
+SEARCH_SETTLE_MS = 2000
+
 # Where the app keeps the selected course between renders.
 COURSE_ID_KEY = "course_id"
 COURSE_NAME_KEY = "course_name"
@@ -106,9 +110,14 @@ class CourseSwitchModal:
         return self.page.locator(".csm-class-group")
 
     def get_class_group(self, name):
+        """By exact class name. A class holding a premium course carries the
+        Premium chip inside the same label, and its text runs straight on from
+        the name, so that is allowed to follow it."""
         return self.get_class_groups().filter(
             has=self.page.locator(".csm-class-header-label").filter(
-                has_text=re.compile(r"^\s*" + re.escape(name) + r"\b")
+                has_text=re.compile(
+                    r"^\s*" + re.escape(name) + r"\s*(Premium\s*)?$"
+                )
             )
         )
 
@@ -153,15 +162,48 @@ class CourseSwitchModal:
     def get_current_course_name(self):
         return self.get_current_course().inner_text().strip().split("\n")[0]
 
-    def choose(self, name):
-        """Pick a course out of the whole catalogue.
+    def is_badged_premium(self, name):
+        """Whether one course's row carries the Premium chip."""
+        return self.reveal(name).locator(".csm-premium-badge").count() > 0
 
-        Searched for rather than scrolled to: only the current course's own
-        class is left open, so anything else has to be found first."""
+    def is_class_badged_premium(self, class_name):
+        """Whether a class header carries the Premium chip, which the app puts
+        there when the class holds a premium course."""
+        return (
+            self.get_class_group(class_name)
+            .first.locator(".csm-class-header-label .csm-premium-badge")
+            .count()
+            > 0
+        )
+
+    def reveal(self, name):
+        """Bring one course's row into the list and hand it back.
+
+        Searched for rather than scrolled to, because the catalogue runs to
+        hundreds. Searching narrows the classes to the ones that match, but it
+        does not open them: only the class the current course sits in is left
+        open, so a course anywhere else needs its class opened before its row
+        exists at all."""
         self.search(name)
-        course = self.get_course(name).first
-        course.wait_for()
-        course.click()
+        row = self.get_course(name).first
+        try:
+            row.wait_for(timeout=SEARCH_SETTLE_MS)
+            return row
+        except Exception:
+            pass
+
+        groups = self.get_class_groups()
+        for index in range(groups.count()):
+            group = groups.nth(index)
+            if group.locator(".csm-chevron-open").count() == 0:
+                group.locator(".csm-class-header").click()
+
+        row.wait_for()
+        return row
+
+    def choose(self, name):
+        """Pick a course out of the whole catalogue."""
+        self.reveal(name).click()
 
     def click_current_course(self):
         self.get_current_course().click()
@@ -181,6 +223,17 @@ def course_catalogue(page):
         course["title"].strip(): course["id"]
         for grade in call_api(page, "/courses_list")["classes"]
         for course in grade["courses"]
+    }
+
+
+def premium_courses(page):
+    """The courses the catalogue treats as premium, as {title: id}.
+
+    This is the list the switcher opens on, and the same list it draws the
+    Premium chips from, so it is what a chip has to be held against."""
+    return {
+        course["title"].strip(): course["id"]
+        for course in call_api(page, "/premium_courses")["premium_courses"]
     }
 
 

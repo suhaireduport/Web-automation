@@ -143,3 +143,76 @@ class AnalyticsPage:
 
     def get_info_section_titles(self):
         return self.page.locator(".ais-section-title")
+
+    # ---------- syllabus tracker ----------
+    #
+    # The ability and syllabus cards are only built once they are scrolled
+    # near, so the syllabus card is not in the page at all on a screen that has
+    # not been scrolled. Everything here scrolls first.
+    #
+    # The subject strip is drawn with the same .an-subject-col the ability card
+    # uses, so anything read subject wise off the syllabus card has to be asked
+    # for through the card rather than off the page.
+
+    def scroll_to_bottom(self):
+        """Bring the foot of the screen into view so the lazy cards build.
+
+        The analysis screen scrolls inside the app's main pane rather than the
+        window, so scrolling the window does nothing."""
+        self.page.evaluate(
+            """() => {
+                const pane = document.querySelector('.hp-main');
+                if (pane) pane.scrollTop = pane.scrollHeight;
+            }"""
+        )
+        self.get_syllabus_tracker_card().wait_for()
+
+    def get_syllabus_tracker_card(self):
+        return self.get_card("Syllabus Tracker")
+
+    def get_syllabus_more_button(self):
+        return self.page.locator(".an-more-btn-red")
+
+    def click_syllabus_more(self):
+        self.get_syllabus_more_button().click()
+
+    def get_syllabus_course(self):
+        return self.page.locator(".an-syllabus-course")
+
+    def get_syllabus_count(self):
+        return self.page.locator(".an-syllabus-count")
+
+    def get_syllabus_percentage(self):
+        return self.page.locator(".an-ring-text")
+
+    def get_card_subjects(self, title):
+        """The subject strip on one card. Both cards draw theirs with the same
+        class, so which card is being read has to be said."""
+        return self.get_card(title).locator(".an-subject-col")
+
+    def card_subject_count(self, title, timeout=15000):
+        """The subjects on one card, once its strip has been filled in.
+
+        The strip is drawn from a call of its own and arrives after the card
+        shell does, so it is waited for rather than counted straight away.
+        Returns 0 if none turn up."""
+        try:
+            self.get_card_subjects(title).first.wait_for(timeout=timeout)
+        except Exception:
+            return 0
+        return self.get_card_subjects(title).count()
+
+    def get_card_subject_names(self, title):
+        return [
+            name.strip()
+            for name in self.get_card(title).locator(".an-subject-name").all_inner_texts()
+        ]
+
+    def get_card_subject_values(self, title):
+        return [
+            value.strip()
+            for value in self.get_card(title).locator(".an-subject-pct").all_inner_texts()
+        ]
+
+    def click_card_subject(self, title, index):
+        self.get_card_subjects(title).nth(index).click()

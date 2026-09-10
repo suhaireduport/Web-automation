@@ -45,6 +45,7 @@ from pages.leaderboard_page import (
     read_coin_log,
 )
 from pages.practice_page import (
+    COIN_LOG_MODES,
     CORRECT,
     DONT_KNOW,
     WRONG,
@@ -249,12 +250,16 @@ def test_a_completed_quiz_is_written_into_the_coin_log(request, page, taken):
     page.goto(LeaderboardPage.URL, wait_until="domcontentloaded")
     LeaderboardPage(page).wait_for_loaded()
 
-    events = read_coin_log(page, "log-today")
-    practice_events = [
-        event for event in events if event["tag"] == "practice_problem_quiz_completed"
-    ]
+    # The ledger files a set under the mode it ran in, and which mode that is
+    # belongs to the topic rather than to this test, so the tag to look for is
+    # built from the mode the set was actually taken in. Looking under the
+    # other mode's tag finds a set somebody else took.
+    tag = f"practice_{COIN_LOG_MODES[quiz['practised']['mode']]}_quiz_completed"
 
-    assert practice_events, [event["tag"] for event in events]
+    events = read_coin_log(page, "log-today")
+    practice_events = [event for event in events if event["tag"] == tag]
+
+    assert practice_events, (tag, [event["tag"] for event in events])
     assert quiz["completion"]["coin"] in [
         event["score"] for event in practice_events
     ], practice_events

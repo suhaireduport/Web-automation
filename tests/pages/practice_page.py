@@ -4,6 +4,7 @@ from html import unescape
 from playwright.sync_api import Error as PlaywrightError
 
 from pages.home_page import HomePage
+from pages.leaderboard_page import read_balance, read_coin_log
 from pages.question_library_section_page import BASE_URL, normalise
 
 
@@ -130,7 +131,7 @@ class AddTopicsPage:
     def select_topic(self, chapter_index, topic_index):
         self.get_topic(chapter_index, topic_index).click()
 
-    def select_practicable_topic(self, minimum=1):
+    def select_practicable_topic(self, minimum=1, skip=()):
         """Pick the first topic that still has questions left to practise.
 
         A topic whose questions have all been answered cannot be practised, and
@@ -139,10 +140,14 @@ class AddTopicsPage:
         a test can look for them again in the Question Library.
 
         minimum is how many questions the topic has to have left: a set of more
-        than one is only offered by a topic that can fill it."""
+        than one is only offered by a topic that can fill it. skip holds the
+        (chapter, topic) positions already tried, for a caller looking for a
+        topic that offers something the ones before it did not."""
         for chapter_index in range(self.chapter_count()):
             self.open_chapter(chapter_index)
             for topic_index in range(self.get_topics(chapter_index).count()):
+                if (chapter_index, topic_index) in skip:
+                    continue
                 if self.get_remaining_questions(chapter_index, topic_index) < minimum:
                     continue
                 chapter = self.get_chapter_title(chapter_index).inner_text().strip()
@@ -154,8 +159,8 @@ class AddTopicsPage:
                     self.get_topic_title(chapter_index, topic_index).inner_text().strip(),
                 )
                 self.select_topic(chapter_index, topic_index)
-                return chapter, topic
-        return None, None
+                return chapter, topic, (chapter_index, topic_index)
+        return None, None, None
 
     # ---------- footer ----------
 
@@ -295,9 +300,11 @@ class PracticeQuestionPage:
     by what the screen is showing rather than by a second locator.
     """
 
+    # A set names its mode in its own route: quick practice goes straight to
+    # its questions, problem based stops at an instruction screen first.
     URL_PATTERN = re.compile(
         r"https://eduport-react\.pages\.dev/home/homePractice/addtopic/problemBased/"
-        r"practice/quickPractice/\d+.*"
+        r"practice/(quickPractice|instruction)/\d+.*"
     )
 
     def __init__(self, page):
@@ -559,7 +566,7 @@ def open_practice_from_home(page):
     return add_topics
 
 
-def start_quick_practice(page, questions=1, minimum=1):
+def start_quick_practice(page, questions=1, minimum=1, mode=None, take_test=True):
     """Subject -> topic -> topic quiz, all the way to the first question.
 
     Hands back the question page and what was practised, so a test can find the
@@ -568,17 +575,61 @@ def start_quick_practice(page, questions=1, minimum=1):
     topic with fewer keeps its own default. minimum is how many questions the
     topic picked has to have left.
 
+    take_test says whether to go on from the rules screen to the first
+    question; left False, the rules screen is what comes back.
+
+    mode names which of the two practices to take. Left out, whichever the
+    setup screen has already selected is taken, which is what every caller did
+    before the two were told apart. Named and not offered by the topic that was
+    picked, (None, None) comes back with the mode said in the reason.
+
     Returns (None, None) when no topic on the account has a question left to
     practise, which is a test data problem rather than a failure."""
-    add_topics = open_practice_from_home(page)
-    subject = add_topics.get_active_subject()
-    chapter, topic = add_topics.select_practicable_topic(minimum=minimum)
-    if topic is None:
-        return None, None
-    add_topics.click_continue()
+    tried = set()
+    offered = {}
 
-    config = PracticeConfigPage(page)
-    config.wait_for_loaded()
+    while True:
+        # Back to home each time round: after a topic has been turned down for
+        # not offering the mode, the browser is sitting on that topic's setup
+        # screen and Practice is only reachable from home.
+        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        add_topics = open_practice_from_home(page)
+        subject = add_topics.get_active_subject()
+        chapter, topic, where = add_topics.select_practicable_topic(
+            minimum=minimum, skip=tried
+        )
+        if topic is None:
+            if offered:
+                # There were topics to practise; none of them would give this
+                # mode, which is a different thing from having nothing left.
+                return None, {
+                    "reason": f"No topic offers {mode!r}. Tried "
+                    + ", ".join(f"{name!r} ({modes})" for name, modes in offered.items())
+                }
+            return None, None
+
+        add_topics.click_continue()
+        config = PracticeConfigPage(page)
+        config.wait_for_loaded()
+
+        if mode is None or mode in config.get_mode_names():
+            break
+
+        # This topic will not give the mode that was asked for, so try the next
+        # one rather than standing down on the first that says no.
+        tried.add(where)
+        offered[topic] = config.get_mode_names()
+        if len(tried) >= MODE_SEARCH_TOPICS:
+            return None, {
+                "reason": f"No topic offers {mode!r} in the first "
+                f"{len(tried)} looked at: "
+                + ", ".join(f"{name!r} ({modes})" for name, modes in offered.items())
+            }
+
+    if mode is not None:
+        config.select_mode(mode)
+
+    taking = config.get_selected_mode_name()
     if config.get_count(questions).count():
         config.select_count(questions)
     else:
@@ -587,8 +638,14 @@ def start_quick_practice(page, questions=1, minimum=1):
 
     practice = PracticeQuestionPage(page)
     practice.get_take_test_button().wait_for(timeout=30000)
-    practice.take_test()
-    return practice, {"subject": subject, "chapter": chapter, "topic": topic}
+    if take_test:
+        practice.take_test()
+    return practice, {
+        "subject": subject,
+        "chapter": chapter,
+        "topic": topic,
+        "mode": taking,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -608,8 +665,50 @@ def start_quick_practice(page, questions=1, minimum=1):
 # than a fixed number of times.
 # ---------------------------------------------------------------------------
 
-PROBLEM_QUIZ_API = "practice-quiz/problem-quiz"
-SUBMIT_API = "practice-quiz/submit/problem-quiz"
+# The setup screen offers up to two modes and they are two different quizzes,
+# not one quiz with a label: each is served and submitted through its own pair
+# of calls, and each names itself on its own result screen. Which of the two a
+# topic offers is the topic's business - some offer both, some only Quick
+# practice - so a test that means one of them has to ask for it by name and
+# stand down when it is not on offer.
+PROBLEM_BASED = "Problem based"
+QUICK_PRACTICE = "Quick practice"
+MODES = (PROBLEM_BASED, QUICK_PRACTICE)
+
+# mode -> (where its questions come from, where its answers go)
+QUIZ_APIS = {
+    PROBLEM_BASED: ("practice-quiz/problem-quiz", "practice-quiz/submit/problem-quiz"),
+    QUICK_PRACTICE: (
+        "practice-quiz/non-adaptive-quiz",
+        "practice-quiz/submit/non-adaptive-quiz",
+    ),
+}
+
+# What the result screen calls itself, per mode. The rules screen a set opens
+# on names it the same way.
+RESULT_TITLES = {PROBLEM_BASED: "Problem Practice", QUICK_PRACTICE: "Quick Practice"}
+
+# How a mode is spelled in a coin log tag, which reads
+# <where the set was started>_<this>_quiz_completed. A set that is marked in one
+# mode is logged under that mode's tag and not the other's.
+COIN_LOG_MODES = {PROBLEM_BASED: "problem", QUICK_PRACTICE: "non_adaptive"}
+
+# The call that opens a set, whichever mode it is in.
+CREATE_API = "practice-quiz/create"
+
+# How many topics to walk before giving up on finding one that offers a
+# particular mode. Which modes a topic offers is the topic's business, so the
+# first practicable one often is not the one wanted.
+MODE_SEARCH_TOPICS = 6
+
+# Kept for the callers that predate the modes being told apart.
+PROBLEM_QUIZ_API = QUIZ_APIS[PROBLEM_BASED][0]
+SUBMIT_API = QUIZ_APIS[PROBLEM_BASED][1]
+
+# Every questions call and every submit call, so a driver can pick a set up
+# without being told which mode it is in.
+QUESTION_APIS = tuple(apis[0] for apis in QUIZ_APIS.values())
+SUBMIT_APIS = tuple(apis[1] for apis in QUIZ_APIS.values())
 
 CORRECT = "correct"
 WRONG = "wrong"
@@ -667,7 +766,7 @@ def choose_option(practice, key, how):
     return next(index for index in range(len(options)) if index not in right)
 
 
-def take_practice_quiz(page, how=CORRECT, questions=1, attempts=2):
+def take_practice_quiz(page, how=CORRECT, questions=1, attempts=2, mode=None):
     """Start a quick practice, answer every question the same way, and go on
     to the result screen.
 
@@ -684,7 +783,7 @@ def take_practice_quiz(page, how=CORRECT, questions=1, attempts=2):
     fail."""
     for attempt in range(attempts):
         try:
-            return _drive_practice_quiz(page, how, questions)
+            return _drive_practice_quiz(page, how, questions, mode)
         except PlaywrightError as slow:
             if attempt == attempts - 1:
                 raise
@@ -692,26 +791,36 @@ def take_practice_quiz(page, how=CORRECT, questions=1, attempts=2):
             page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
 
 
-def _drive_practice_quiz(page, how, questions):
+def _drive_practice_quiz(page, how, questions, mode=None):
     served = []
     submitted = []
 
+    # Listened for on both modes' calls rather than one mode's. Which mode a
+    # set ends up in is the topic's business unless it was asked for by name,
+    # and a driver watching the wrong pair collects nothing, ends up with an
+    # empty answer key, and fails as though the app had served a question it
+    # never asked for.
     def collect(response):
-        if PROBLEM_QUIZ_API in response.url and SUBMIT_API not in response.url:
-            served.append(response.json())
-        elif SUBMIT_API in response.url:
+        if any(api in response.url for api in SUBMIT_APIS):
             submitted.append(
                 {
                     "sent": response.request.post_data_json,
                     "answered": response.json(),
                 }
             )
+        elif any(api in response.url for api in QUESTION_APIS):
+            served.append(response.json())
 
     page.on("response", collect)
     try:
-        practice, practised = start_quick_practice(page, questions=questions)
+        practice, practised = start_quick_practice(
+            page, questions=questions, mode=mode
+        )
         if practice is None:
-            return None
+            # Nothing left to practise anywhere is None; a topic that will not
+            # offer the mode that was asked for says so, so a caller can stand
+            # down with the reason rather than with a bare nothing.
+            return practised if practised and "reason" in practised else None
 
         key = {}
         for payload in served:
@@ -763,3 +872,33 @@ def _drive_practice_quiz(page, how, questions):
         "completion": finish["answered"],
         "completion_request": finish["sent"],
     }
+
+
+def attend_quiz(page, how, mode, questions=1):
+    """Take one practice in `mode` answering every question `how`, and gather in
+    one go everything an attend check needs: the balance either side of it, what
+    the result screen said, what the completion call answered, and the coin log
+    it left behind.
+
+    Driven once and read by many tests. Every question a practice asks is used
+    up for good, so taking a fresh one per assertion would empty the account
+    inside a single run.
+
+    Hands back None when nothing is left to practise anywhere, and a dict
+    carrying only a reason when the topics on offer will not give this mode."""
+    before = read_balance(page)
+    taken = take_practice_quiz(page, how=how, questions=questions, mode=mode)
+    if taken is None or "reason" in taken:
+        return taken
+
+    practice = taken["practice"]
+    taken.update(
+        before=before,
+        result_title=practice.get_result_title().inner_text().strip(),
+        on_result=practice.get_awarded_coins(),
+        marked_negative=practice.award_is_marked_negative(),
+        stats=practice.get_result_stat_values(),
+    )
+    practice.close_result()
+    taken.update(after=read_balance(page), log=read_coin_log(page, "log-today"))
+    return taken

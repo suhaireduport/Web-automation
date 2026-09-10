@@ -41,9 +41,16 @@ class StreakPage:
         )
 
     def get_streak_from_message(self):
-        """The run the line underneath reads out: "You are on a 3-day streak."
-        """
-        return int(re.search(r"(\d+)\s*-\s*day streak", self.get_message()).group(1))
+        """The run the line underneath reads out: "You are on a 3-days streak."
+
+        The number is pulled out rather than the whole line matched, because
+        the app writes the noun plural whatever the count is - "1-days streak"
+        as readily as "3-days streak" - and singular is allowed for in case
+        that is ever tidied up."""
+        message = self.get_message()
+        found = re.search(r"(\d+)\s*-\s*days?\s+streak", message)
+        assert found, f"no streak was read out in {message!r}"
+        return int(found.group(1))
 
     # ---------- the run of days ----------
 

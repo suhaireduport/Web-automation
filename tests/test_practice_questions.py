@@ -94,7 +94,7 @@ def start_practice(page, questions=1, minimum=1):
 
     add_topics = open_practice_from_home(page)
     subject = add_topics.get_active_subject()
-    chapter, topic = add_topics.select_practicable_topic(minimum=minimum)
+    chapter, topic, _ = add_topics.select_practicable_topic(minimum=minimum)
     if topic is None:
         pytest.skip(NO_TOPIC if minimum == 1 else NO_LONG_TOPIC)
     add_topics.click_continue()

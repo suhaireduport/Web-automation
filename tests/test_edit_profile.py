@@ -13,6 +13,7 @@ from playwright.sync_api import expect
 from conftest import STUDENT_MOBILE
 from pages.edit_profile_page import EditProfilePage
 from pages.home_page import HomePage
+from pages.leaderboard_page import call_api
 from pages.profile_page import ProfilePage
 
 
@@ -293,10 +294,13 @@ def test_changed_name_shows_on_the_profile_page(page, edit_page, restore_profile
 # Scenario:   changing the course reaches the home page
 # Pre:        the edit page is open
 # Steps:      pick a different course, Save
-# Expected:   back on home, the course badge shows the newly chosen course
+# Expected:   back on home, the course badge shows the newly chosen course, and
+#             the account is actually in it
 # ---------------------------------------------------------------------------
 
 def test_changing_the_course_updates_the_home_course_badge(page, edit_page, restore_profile):
+    """The badge alone is not enough: a header can carry the new course while
+    the account is still in the old one, so the profile call is asked too."""
     if len(edit_page.get_course_options()) < 2:
         pytest.skip("This account has only one course to choose from")
 
@@ -307,6 +311,7 @@ def test_changing_the_course_updates_the_home_course_badge(page, edit_page, rest
     save_profile(page, edit_page)
 
     expect(home_fresh(page).get_course_button()).to_have_text(new_course)
+    assert call_api(page, "/profile")["student"]["course_name"].strip() == new_course
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +335,10 @@ def test_changing_name_and_course_together_shows_both_on_home(page, edit_page, r
     expect(home_page.get_greeting()).to_have_text(f"Hello, {new_name}")
     expect(home_page.get_course_button()).to_have_text(new_course)
 
+    student = call_api(page, "/profile")["student"]
+    assert student["name"] == new_name
+    assert student["course_name"].strip() == new_course
+
 
 # ---------------------------------------------------------------------------
 # Scenario:   saving without touching anything changes nothing
@@ -347,6 +356,7 @@ def test_saving_without_changes_leaves_the_profile_alone(page, edit_page):
     home_page = home_fresh(page)
     expect(home_page.get_greeting()).to_have_text(f"Hello, {name}")
     expect(home_page.get_course_button()).to_have_text(course)
+    assert call_api(page, "/profile")["student"]["course_name"].strip() == course
 
 
 # ---------------------------------------------------------------------------

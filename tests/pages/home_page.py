@@ -95,3 +95,17 @@ class HomePage:
 
     def get_contact_us_card(self):
         return self.page.locator(".hp-unlock-card")
+
+    # Not being subscribed is answered two ways, and which one is on screen
+    # depends on whether the account ever held a course: one that never did is
+    # offered the Contact Us card above, one whose course has run out is
+    # offered this tile and its Renew now button instead.
+
+    def get_expiry_tile(self):
+        return self.page.locator(".hp-expiry-tile")
+
+    def get_expiry_text(self):
+        return self.page.locator(".hp-expiry-text")
+
+    def get_renew_button(self):
+        return self.page.locator(".hp-expiry-renew")

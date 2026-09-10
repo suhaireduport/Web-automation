@@ -5,7 +5,8 @@ class SubscriptionPage:
     """The subscriptions the account holds, reached from the profile menu.
 
     One card per subscription: the course it belongs to over the plan itself,
-    with the expiry date and a status badge under a divider.
+    with a status badge beside the course and the expiry in a labelled row
+    under it. Active and Expired are two tabs over the list.
     """
 
     URL = f"{BASE_URL}/subscriptions"
@@ -54,13 +55,20 @@ class SubscriptionPage:
         return self.get_courses().nth(index)
 
     def get_plans(self):
-        return self.page.locator(".sub-class")
+        """The plan named under the course."""
+        return self.page.locator(".sub-batch")
 
     def get_plan(self, index):
         return self.get_plans().nth(index)
 
     def get_expiries(self):
-        return self.page.locator(".sub-expiry")
+        """The expiry date.
+
+        It sits in a labelled column rather than a field of its own, and a card
+        can carry more than one such column, so it is found by its label."""
+        return self.page.locator(".sub-info-col").filter(
+            has=self.page.locator(".sub-info-label", has_text="Expiry")
+        ).locator(".sub-info-value")
 
     def get_expiry(self, index):
         return self.get_expiries().nth(index)

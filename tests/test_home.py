@@ -1,4 +1,6 @@
+import datetime
 import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -119,44 +121,10 @@ def test_subject_open(page):
     page.wait_for_timeout(2000)
     expect(page).to_have_url(re.compile(r"https://eduport-react\.pages\.dev/home/subject/.*"))
 
-def test_resource_open(login_as):
-    page = login_as(STUDENT_MOBILE)
-
-    home_page = HomePage(page)
-
-    page.wait_for_timeout(3000)
-
-    resources = home_page.get_resources()
-
-    resource = resources.nth(4)
-    resource.click()
-
-    page.wait_for_timeout(2000)
-
-    expect(page).to_have_url(re.compile(r"https://eduport-react\.pages\.dev/home/resources/.*"))
-
-def test_resource_count(page):
-
-    home_page = HomePage(page)
-
-    page.wait_for_timeout(3000)
-
-    resources = home_page.get_resources()
-
-    print("Resource count:", resources.count())
-    resource_titles = home_page.get_resource_titles()
-    all_titles = [
-        resource_titles.nth(i).inner_text().strip()
-        for i in range(resource_titles.count())
-    ]
-
-    actual_resources = [
-        title for title in all_titles
-        if title not in ["Lives", "Practice", "Question Library"]
-    ]
-
-    print("Actual resource count:", len(actual_resources))
-    print("Resources:", actual_resources)
+# Opening a resource used to be checked here by tapping the fifth button in the
+# row and looking at the route, and counting them by printing the titles without
+# asserting anything. Both are in test_resources.py now, against the folder each
+# button opens and the call that draws it.
 
 def test_lives_open(page):
 
@@ -339,6 +307,8 @@ def test_home_resources_match_the_home_api(page):
     shown = [title for title in titles if title not in FIXED_RESOURCES]
 
     assert shown == expected
+    for shortcut in FIXED_RESOURCES:
+        assert shortcut in titles, f"the row lost its {shortcut} shortcut"
 
 
 def test_home_greeting_and_course_match_the_home_api(page):
@@ -351,18 +321,37 @@ def test_home_greeting_and_course_match_the_home_api(page):
     expect(home_page.get_course_button()).to_have_text(user["course_name"])
 
 
+def has_expired(expiry_date):
+    """Whether a payload's expiry_date is already behind us."""
+    return datetime.date.fromisoformat(expiry_date) < datetime.date.today()
+
+
 def test_contact_us_card_follows_the_subscription_status_from_the_api(page):
-    """The card is the app's own answer to subscription_status, so the payload
-    decides which way this goes rather than the account being written down."""
+    """What the screen offers an unsubscribed account is the app's own answer to
+    the payload, so what is served decides this rather than the account being
+    written down.
+
+    There are two of those answers and expiry_date picks between them: an
+    account carrying no expiry has never held a course and is offered the
+    Contact Us card, while one whose course has run out is offered the expiry
+    tile and its Renew now button in its place."""
     body = reload_home(page, HOME_API)
 
     home_page = HomePage(page)
     home_page.get_subjects().first.wait_for()
 
-    if body["subscription_status"]:
+    expiry = body.get("expiry_date")
+
+    if not expiry:
+        expect(home_page.get_contact_us_card()).to_be_visible()
+        expect(home_page.get_expiry_tile()).to_be_hidden()
+    elif not body["subscription_status"] or has_expired(expiry):
+        expect(home_page.get_expiry_tile()).to_be_visible()
+        expect(home_page.get_renew_button()).to_be_enabled()
         expect(home_page.get_contact_us_card()).to_be_hidden()
     else:
-        expect(home_page.get_contact_us_card()).to_be_visible()
+        expect(home_page.get_contact_us_card()).to_be_hidden()
+        expect(home_page.get_expiry_tile()).to_be_hidden()
 
 
 def test_coin_chip_matches_the_coins_api(page):

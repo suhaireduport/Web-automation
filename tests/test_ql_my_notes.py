@@ -101,10 +101,17 @@ def test_my_notes_shows_its_title(my_notes):
 
 
 def test_my_notes_offers_back_and_search(my_notes):
+    """Search is offered whatever the section holds, but there is nothing to
+    search until it holds something: the button is served disabled on an empty
+    section, which is how every Question Library section behaves."""
     expect(my_notes.get_back_button()).to_be_visible()
     expect(my_notes.get_back_button()).to_be_enabled()
     expect(my_notes.get_search_button()).to_be_visible()
-    expect(my_notes.get_search_button()).to_be_enabled()
+
+    if my_notes.has_notes():
+        expect(my_notes.get_search_button()).to_be_enabled()
+    else:
+        expect(my_notes.get_search_button()).to_be_disabled()
 
 
 def test_back_returns_to_the_question_library(page, my_notes):

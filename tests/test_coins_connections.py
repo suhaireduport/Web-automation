@@ -47,10 +47,24 @@ STREAK_API = "**/api/v3/analytics/streak/now"
 
 # The tags the coin ledger uses, as seen on the accounts under test. Anything
 # outside this set is something new to look at rather than a failure.
-KNOWN_TAGS = {
+#
+# A quiz tag is <where it was started>_<which practice>_quiz_completed. A set
+# can be started from the Practice screen or as a study task off Daily Tasks,
+# and either way it runs in one of the two modes the setup screen offers -
+# Problem based, which is adaptive, or Quick practice, which is not - so the
+# four combinations are all real. Beside them sit the three that are not
+# practices: an exam attended, a subtopic's checkpoint quiz, and a study task
+# finished.
+QUIZ_TAGS = {
+    f"{started}_{mode}_quiz_completed"
+    for started in ("practice", "study")
+    for mode in ("problem", "non_adaptive")
+}
+
+KNOWN_TAGS = QUIZ_TAGS | {
     "exam_attended",
-    "practice_problem_quiz_completed",
     "checkpoint_quiz_completed",
+    "study_daily_task_completed",
 }
 
 
@@ -120,9 +134,10 @@ def test_an_exam_award_is_on_the_board_and_in_the_log_sheet(exams_page):
 
 
 def test_every_coin_event_is_one_of_the_kinds_the_app_pays_for(exams_page):
-    """The ledger only ever carries events the app has a published rate for:
-    an exam attended, a practice quiz completed, or a topic's checkpoint quiz
-    completed."""
+    """The ledger only ever carries events the app has a published rate for: an
+    exam attended, a quiz completed - from the Practice screen or as a study
+    task, in either mode - a subtopic's checkpoint quiz, or a study task
+    finished."""
     open_leaderboard(exams_page)
     events = read_coin_log(exams_page, "log")
     if not events:
@@ -224,7 +239,17 @@ def test_the_leaderboard_row_is_the_student_the_profile_call_describes(
     assert mine["avatar"] == student["avatar"]
 
     index = leaderboard.current_row_index()
-    expect(leaderboard.get_row_name(index)).to_have_text(student["name"].strip())
-    expect(leaderboard.get_row(index).locator("img.lb-row-avatar")).to_have_attribute(
+    assert index is not None, (
+        f"the call puts this student on All Time but nothing on screen is "
+        f"marked as theirs: {leaderboard.get_names()}"
+    )
+    # A podium tile prints a first name where a list row prints the whole one,
+    # so the name is held to whichever of the two this entry is drawn as. Both
+    # come from the same profile either way, and a wrong name still fails.
+    full_name = student["name"].strip()
+    expected = full_name.split()[0] if leaderboard.is_podium_place(index) else full_name
+    expect(leaderboard.get_row_name(index)).to_have_text(expected)
+
+    expect(leaderboard.get_row_avatar(index)).to_have_attribute(
         "src", student["avatar"]
     )

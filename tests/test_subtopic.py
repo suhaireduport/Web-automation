@@ -56,18 +56,49 @@ def topic_page(page, subject):
     return topics
 
 
+# How many subtopics to open before giving up on finding a plain video. The
+# strip is the only thing that says what a subtopic holds, so they have to be
+# opened to be told apart, and each one costs a page load.
+VIDEO_ONLY_SEARCH = 6
+
+
 @pytest.fixture
 def video_only_page(page, topic_page):
-    """A subtopic that holds nothing but a video."""
-    index = topic_page.find_video_only_subtopic()
-    if index is None:
-        pytest.skip("No video-only subtopic in this chapter")
+    """A subtopic that holds nothing but a video.
 
-    topic_page.open_subtopic_at(index)
+    Which subtopic that is cannot be told from the topic list: the dots there
+    mean nothing, and the strip only says what a subtopic holds once its player
+    is open. The first subtopic of a chapter is often the one carrying the
+    checkpoints, so they are opened in turn until one turns out to be a plain
+    video rather than assuming a position."""
+    topics_url = page.url
+    total = topic_page.get_all_subtopics().count()
+    if total == 0:
+        pytest.skip("Chapter has no subtopics")
 
     subtopic = SubtopicPage(page)
-    subtopic.wait_for_player_loaded()
-    return subtopic
+    looked_at = []
+    for index in range(min(total, VIDEO_ONLY_SEARCH)):
+        if index:
+            page.goto(topics_url, wait_until="domcontentloaded")
+            topic_page.wait_for_topics_loaded()
+            topic_page.expand_all_topics()
+
+        topic_page.open_subtopic_at(index)
+        subtopic.wait_for_player_loaded()
+        subtopic.get_strip_items().first.wait_for()
+
+        if subtopic.is_video_only():
+            return subtopic
+        looked_at.append(
+            f"{index}: {subtopic.get_strip_items().count()} items, "
+            f"{subtopic.get_quiz_strip_items().count()} of them quizzes"
+        )
+
+    pytest.skip(
+        "No video-only subtopic in the first "
+        f"{min(total, VIDEO_ONLY_SEARCH)} of this chapter (" + "; ".join(looked_at) + ")"
+    )
 
 
 @pytest.fixture
@@ -156,7 +187,13 @@ def test_checkpoint_quiz_after_finishing_the_video(page, checkpoint_page):
         page.wait_for_timeout(5000)
 
     expect(checkpoint_page.get_quiz_card()).to_be_visible()
-    expect(checkpoint_page.get_quiz_question()).not_to_be_empty()
+
+    # A checkpoint question can be a picture with no text at all - the options
+    # are lettered A to D and the choices themselves are drawn in it.
+    question = checkpoint_page.get_quiz_question()
+    assert question.inner_text().strip() != "" or question.locator("img").count(), (
+        "the question is neither text nor a picture"
+    )
 
 
 def test_checkpoint_quiz_options_are_selectable(page, checkpoint_page):

@@ -1,5 +1,9 @@
 import re
 
+# How many places the podium takes off the top of a board before the list
+# starts. A board with this many students or fewer is drawn as a plain list.
+PODIUM_PLACES = 3
+
 
 class LeaderboardPage:
     """The coin leaderboard, reached from the coin chip in any app header.
@@ -83,8 +87,36 @@ class LeaderboardPage:
     def get_list(self):
         return self.page.locator(".lb-list")
 
-    def get_rows(self):
+    # A board is drawn in two parts. The top three are podium tiles above the
+    # list, laid out 2, 1, 3 for the picture, and the list underneath starts at
+    # rank four. A board with three students or fewer has no podium and is a
+    # plain list. DOM order is therefore not rank order, so everything here
+    # finds a podium tile by the place it carries rather than by where it sits,
+    # and every reading below comes back in rank order with the two parts run
+    # together - one board, however it happens to be drawn.
+
+    def get_podium(self):
+        return self.page.locator(".lb-podium")
+
+    def has_podium(self):
+        return self.get_podium().count() > 0
+
+    def get_podium_tiles(self):
+        return self.page.locator(".lb-rank-tile")
+
+    def get_podium_tile(self, place):
+        """The tile in a given place, counting from one."""
+        return self.page.locator(f".lb-rank-tile.lb-rank-{place}")
+
+    def get_list_rows(self):
         return self.page.locator(".lb-row")
+
+    def get_rows(self):
+        """Every entry on the board, podium tiles and list rows alike.
+
+        For counting and waiting. Reach for get_row() rather than nth() on
+        this: the podium is not held in rank order."""
+        return self.page.locator(".lb-rank-tile, .lb-row")
 
     def row_count(self, timeout=10000):
         """count() does not auto-wait, and an empty tab never grows a row, so
@@ -96,63 +128,104 @@ class LeaderboardPage:
         return self.get_rows().count()
 
     def get_row(self, index):
-        return self.get_rows().nth(index)
+        """The entry in the given place on the board, counting from the top."""
+        if self.has_podium():
+            if index < PODIUM_PLACES:
+                return self.get_podium_tile(index + 1)
+            return self.get_list_rows().nth(index - PODIUM_PLACES)
+        return self.get_list_rows().nth(index)
 
     def get_row_rank(self, index):
-        return self.get_row(index).locator(".lb-row-rank")
+        return self.get_row(index).locator(".lb-rank-badge, .lb-row-rank")
 
     def get_row_name(self, index):
-        return self.get_row(index).locator(".lb-row-name")
+        return self.get_row(index).locator(".lb-name, .lb-row-name")
 
     def get_row_coins(self, index):
-        return self.get_row(index).locator(".lb-row-coins")
+        return self.get_row(index).locator(".lb-coins, .lb-row-coins")
+
+    def is_podium_place(self, index):
+        """Whether the entry in this place is drawn as a podium tile rather
+        than as a list row. The two are not drawn alike, so a caller reading
+        one has to know which it has."""
+        return self.has_podium() and index < PODIUM_PLACES
+
+    def get_row_avatar(self, index):
+        """The picture on an entry. A podium tile carries a fallback div of the
+        same class beside the image, so the image is asked for by tag."""
+        return self.get_row(index).locator("img.lb-avatar, img.lb-row-avatar")
+
+    def _board_texts(self, on_a_tile, on_a_row):
+        """One reading per entry, in rank order, off the podium and the list
+        together."""
+        readings = []
+        if self.has_podium():
+            for place in range(1, PODIUM_PLACES + 1):
+                tile = self.get_podium_tile(place)
+                if tile.count():
+                    readings.append(tile.locator(on_a_tile).inner_text().strip())
+        readings += [
+            text.strip() for text in self.page.locator(on_a_row).all_inner_texts()
+        ]
+        return readings
 
     def get_ranks(self):
-        """Ranks are drawn zero padded ("01"), and read back as numbers."""
-        return [
-            int(text.strip())
-            for text in self.page.locator(".lb-row-rank").all_inner_texts()
-        ]
+        """Ranks are drawn zero padded ("01") in the list and bare on the
+        podium, and read back as numbers either way."""
+        return [int(text) for text in self._board_texts(".lb-rank-badge", ".lb-row-rank")]
 
     def get_names(self):
-        return [
-            name.strip() for name in self.page.locator(".lb-row-name").all_inner_texts()
-        ]
+        return self._board_texts(".lb-name", ".lb-row-name")
 
     def get_coins(self):
-        """The coin figure of every row. It can be negative, so the sign is
+        """The coin figure of every entry. It can be negative, so the sign is
         kept rather than the digits alone."""
         return [
             int(re.search(r"-?\d+", text).group())
-            for text in self.page.locator(".lb-row-coins").all_inner_texts()
+            for text in self._board_texts(".lb-coins", ".lb-row-coins")
         ]
 
     # ---------- the signed in student's row ----------
 
     def get_current_row(self):
-        return self.page.locator(".lb-row-current")
+        """The signed in student's own entry, wherever it is drawn. On the
+        podium it is the tile wearing the YOU tag; in the list it is the row
+        marked current."""
+        return self.page.locator(
+            ".lb-rank-tile:has(.lb-rank-you-tag), .lb-row-current"
+        )
 
     def has_current_row(self):
         return self.get_current_row().count() > 0
 
     def current_row_index(self):
-        """Where the signed in student sits in the list, or None when this tab
+        """Where the signed in student sits on the board, or None when this tab
         does not carry them."""
-        for index in range(self.get_rows().count()):
-            classes = self.get_row(index).get_attribute("class") or ""
+        offset = 0
+        if self.has_podium():
+            for place in range(1, PODIUM_PLACES + 1):
+                tile = self.get_podium_tile(place)
+                if tile.count() and tile.locator(".lb-rank-you-tag").count():
+                    return place - 1
+            offset = PODIUM_PLACES
+
+        rows = self.get_list_rows()
+        for index in range(rows.count()):
+            classes = rows.nth(index).get_attribute("class") or ""
             if "lb-row-current" in classes:
-                return index
+                return offset + index
         return None
 
     def get_clickable_rows(self):
-        """Only the student's own row is offered as something to tap."""
-        return self.page.locator(".lb-row-clickable")
+        """Only the student's own entry is offered as something to tap."""
+        return self.page.locator(".lb-row-clickable, .lb-rank-tile-clickable")
 
     def is_row_clickable(self, index):
-        return "lb-row-clickable" in (self.get_row(index).get_attribute("class") or "")
+        classes = self.get_row(index).get_attribute("class") or ""
+        return "lb-row-clickable" in classes or "lb-rank-tile-clickable" in classes
 
     def get_you_tag(self):
-        return self.page.locator(".lb-you-tag")
+        return self.page.locator(".lb-you-tag, .lb-rank-you-tag")
 
     # ---------- rank movement ----------
 
@@ -161,11 +234,11 @@ class LeaderboardPage:
         "up", "down" or "equal". A tab that publishes no movement has no
         marker at all, which reads back as None."""
         row = self.get_row(index)
-        if row.locator(".lb-delta-up").count():
+        if row.locator(".lb-delta-up, .lb-delta-text-up").count():
             return "up"
-        if row.locator(".lb-delta-down").count():
+        if row.locator(".lb-delta-down, .lb-delta-text-down").count():
             return "down"
-        if row.locator(".lb-delta-equal").count():
+        if row.locator(".lb-delta-equal, .lb-delta-text-equal").count():
             return "equal"
         return None
 
@@ -242,7 +315,7 @@ class LeaderboardPage:
         The sheet renders before what it holds arrives, so it is not settled
         until it is showing either entries or the line saying there are
         none."""
-        self.get_current_row().click()
+        self.get_current_row().first.click()
         self.get_log_sheet().wait_for()
         self.page.wait_for_function(
             "() => document.querySelector('.mls-tile, .mls-no-coins-title') !== null",

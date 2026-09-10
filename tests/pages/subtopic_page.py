@@ -451,6 +451,30 @@ class SubtopicPage:
     def select_quiz_option(self, index):
         self.get_quiz_option(index).click()
 
+    def get_quiz_choose_label(self):
+        """"Choose 1 answer" over the options."""
+        return self.page.locator(".pl-quiz-choose")
+
+    def get_quiz_note_button(self):
+        """The note pen on the quiz card. The bookmark sits in the card header
+        and the note floats over the options, so they are two locators."""
+        return self.page.locator(".pl-note-fab")
+
+    def quiz_is_answered(self):
+        """A checkpoint question is answered once and stays answered: reopening
+        it shows the options frozen with the right one and, if one was picked,
+        the wrong one marked."""
+        options = self.get_quiz_options()
+        if options.count() == 0:
+            return False
+        return options.first.get_attribute("disabled") is not None
+
+    def get_correct_quiz_option(self):
+        return self.page.locator(".pl-qopt-correct")
+
+    def get_wrong_quiz_option(self):
+        return self.page.locator(".pl-qopt-wrong")
+
     def get_quiz_solution(self):
         return self.page.locator(".pl-quiz-solution")
 

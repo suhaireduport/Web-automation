@@ -52,7 +52,7 @@ def browser():
     """One browser for the whole run instead of one per test."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
-            headless=False,
+            headless=HEADLESS,
             # Feed a synthetic mic so voice recording works without hardware
             # and without a permission prompt.
             args=[

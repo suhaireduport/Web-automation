@@ -24,6 +24,7 @@ course-scoped.
 """
 
 import re
+from datetime import datetime
 
 import pytest
 from playwright.sync_api import expect
@@ -37,6 +38,7 @@ from pages.course_switch_page import (
     PREMIUM_COURSES_API,
     course_catalogue,
     courses_by_class,
+    premium_courses,
     selected_course,
     set_course,
 )
@@ -55,6 +57,17 @@ SWITCHED_MESSAGE = "Syllabus set successfully."
 # An id no course has, for asking the endpoint what it does with one. The modal
 # never offers such a thing, so this is the only way to reach that answer.
 MISSING_COURSE_ID = 999999999
+
+# The call each page is built from. A page showing the right course name while
+# being built from the previous course's payload is the thing these are here to
+# catch, so every page is checked against its own call and not against the badge.
+HOME_API = "**/api/v3/home"
+EXAMS_API = "**/api/v3/exams/all"
+TASKS_API = "**/api/v3/dailytasks/list"
+ABILITY_API = "**/api/v3/analytics/ability/list"
+
+# The four lists a day's tasks are split into in the daily tasks payload.
+TASK_KINDS = ("study_tasks", "practice_tasks", "revision_tasks", "exam_tasks")
 
 
 @pytest.fixture
@@ -201,6 +214,189 @@ def page_content(pom, name):
         "course": pom.get_course_name().inner_text().strip(),
         "api_course": account_course(pom.page),
     }
+
+
+# ---------------------------------------------------------------------------
+# Holding each page against the course it is supposed to be showing
+#
+# A page can put the newly chosen course in its header while it is still built
+# from the previous course's payload, so a badge that reads correctly proves
+# nothing on its own. Each page below is opened with its own call listened for,
+# the payload is shown to belong to the chosen course, and only then is the
+# screen held against that payload.
+#
+# What makes a payload the course's own, page by page:
+#   home         user.course_name is the course
+#   exams        every exam is filed under the course by name
+#   daily tasks  every exam a task points at is one of the course's own exams
+#   analytics    every subject the ability tracker scores is one of the
+#                course's subjects
+#   profile      course_id is the id the switch posted
+#
+# Each returns a fingerprint of what it was served, so one course's can be held
+# against another's.
+# ---------------------------------------------------------------------------
+
+
+def course_ref(catalogue, title):
+    """A course as the switcher deals in it: the title that shows on screen and
+    the id the switch posts."""
+    assert title in catalogue, f"{title!r} is not a course the catalogue offers"
+    return {"title": title, "id": catalogue[title]}
+
+
+def verify_home(page, course):
+    with page.expect_response(HOME_API) as answer:
+        page.goto(HOME_URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200
+    body = answer.value.json()
+
+    served = body["user"]["course_name"].strip()
+    assert served == course["title"], (
+        f"home was built from {served!r} after the switch to {course['title']!r}"
+    )
+
+    home = HomePage(page)
+    wait_ready(home, "home")
+    assert home.get_subject_names() == [s["title"].strip() for s in body["subjects"]]
+    assert course_label(home) == course["title"]
+
+    return {
+        "subject_ids": {s["id"] for s in body["subjects"]},
+        "resources": [r["title"].strip() for r in body["resources"]],
+        "subscription_status": body["subscription_status"],
+    }
+
+
+def verify_exams(page, course):
+    with page.expect_response(EXAMS_API) as answer:
+        page.goto(ExamPage.URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200
+    listed = answer.value.json()["exams"]
+
+    filed_under = {(exam.get("subject") or "").strip() for exam in listed}
+    assert filed_under <= {course["title"]}, (
+        f"exams/all came back carrying exams filed under "
+        f"{sorted(filed_under - {course['title']})} after the switch to "
+        f"{course['title']!r}"
+    )
+
+    exams = ExamPage(page)
+    wait_ready(exams, "exams")
+    counted = sum(exams.get_tab_count_value(tab) for tab in ("Current", "Upcoming", "Past"))
+    assert counted == len(listed), (
+        f"the tabs count {counted} exams and exams/all served {len(listed)}"
+    )
+    assert course_label(exams) == course["title"]
+
+    return {"exam_ids": {exam["id"] for exam in listed}}
+
+
+def selected_day(tasks):
+    """The date the tasks list is showing, spelled the way the payload spells
+    it. The strip carries the day number and the header the month and year."""
+    day = re.search(r"\d+", tasks.get_selected_date().inner_text()).group()
+    month_year = tasks.get_month_year().inner_text().strip()
+    return datetime.strptime(f"{day} {month_year}", "%d %B %Y").strftime("%Y-%m-%d")
+
+
+def verify_daily_tasks(page, course, course_exam_ids):
+    with page.expect_response(TASKS_API) as answer:
+        page.goto(DailyTasksPage.URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200
+    body = answer.value.json()
+
+    pointed_at = {
+        task["exam_id"] for day in body["results"] for task in day["exam_tasks"]
+    }
+    assert pointed_at <= course_exam_ids, (
+        f"the tasks point at exams {sorted(pointed_at - course_exam_ids)}, which "
+        f"are not among {course['title']!r}'s own"
+    )
+
+    tasks = DailyTasksPage(page)
+    wait_ready(tasks, "daily-tasks")
+    # Task cards land a moment after the strip they hang under, and count()
+    # does not wait, so give them that moment.
+    page.wait_for_timeout(2000)
+
+    showing = selected_day(tasks)
+    listed = next((day for day in body["results"] if day["date"] == showing), None)
+    expected = 0 if listed is None else sum(len(listed[kind]) for kind in TASK_KINDS)
+    assert tasks.get_task_cards().count() == expected, (
+        f"the payload puts {expected} tasks on {showing} and the page shows "
+        f"{tasks.get_task_cards().count()}"
+    )
+    assert course_label(tasks) == course["title"]
+
+    return {
+        "days": {day["date"]: sum(len(day[k]) for k in TASK_KINDS) for day in body["results"]},
+        "exams_pointed_at": pointed_at,
+        "is_premium": body["is_premium"],
+    }
+
+
+def verify_analytics(page, course, course_subject_ids):
+    with page.expect_response(ABILITY_API) as answer:
+        page.goto(AnalyticsPage.URL, wait_until="domcontentloaded")
+    assert answer.value.status == 200
+    scored = answer.value.json()["subjects"]
+
+    ids = {subject["id"] for subject in scored}
+    assert ids <= course_subject_ids, (
+        f"the ability tracker scores subjects {sorted(ids - course_subject_ids)}, "
+        f"which are not {course['title']!r}'s"
+    )
+
+    analytics = AnalyticsPage(page)
+    wait_ready(analytics, "analytics")
+    shown = [
+        analytics.get_subject_name(index).inner_text().strip()
+        for index in range(analytics.subject_count())
+    ]
+    assert shown == [subject["title"].strip() for subject in scored]
+    assert course_label(analytics) == course["title"]
+
+    return {"subject_ids": ids}
+
+
+def verify_profile(page, course):
+    """The profile page does not call profile; it is drawn from the home call it
+    makes on load, so that is the payload it is held against. The profile call
+    is then asked separately for the course id, which is the one thing that
+    names the course beyond doubt."""
+    with page.expect_response(HOME_API) as answer:
+        page.goto(ProfilePage.URL, wait_until="domcontentloaded")
+    assert answer.value.json()["user"]["course_name"].strip() == course["title"]
+
+    profile = ProfilePage(page)
+    wait_ready(profile, "profile")
+    assert course_label(profile) == course["title"]
+
+    student = call_api(page, "/profile")["student"]
+    assert student["course_id"] == course["id"], (
+        f"the account is on course {student['course_id']} and "
+        f"{course['title']!r} is {course['id']}"
+    )
+    assert student["course_name"].strip() == course["title"]
+
+    return {"course_id": student["course_id"]}
+
+
+def verify_all_pages_on(page, course):
+    """Walk all five pages and hold each against `course`, payload first and
+    then screen against payload.
+
+    Walked in this order because two of the checks are built out of an earlier
+    one: the day's tasks are held against the course's own exams, and the
+    ability tracker against the course's own subjects."""
+    facts = {}
+    facts["home"] = verify_home(page, course)
+    facts["exams"] = verify_exams(page, course)
+    facts["daily-tasks"] = verify_daily_tasks(page, course, facts["exams"]["exam_ids"])
+    facts["analytics"] = verify_analytics(page, course, facts["home"]["subject_ids"])
+    facts["profile"] = verify_profile(page, course)
+    return facts
 
 
 # ---------------------------------------------------------------------------
@@ -672,14 +868,58 @@ def test_the_home_payload_after_a_switch_belongs_to_the_new_course(
     assert home.get_subject_names() == [s["title"].strip() for s in body["subjects"]]
 
 
-def test_every_page_reports_the_new_course_after_a_single_switch(page, target_course):
-    """One switch, made once on home, and then all five pages asked. The
-    selection belongs to the account, not to the page it was made on."""
-    switch_from(open_page(page, "home"), "home", target_course)
+# ---------------------------------------------------------------------------
+# 4b. Every page against the course that was chosen  (API + UI)
+# ---------------------------------------------------------------------------
 
-    for page_name in PAGES:
-        pom = open_page(page, page_name)
-        assert course_label(pom) == target_course, f"{page_name} still names another course"
+
+@pytest.mark.parametrize("origin", PAGES)
+def test_every_page_serves_the_new_courses_data_after_a_switch_from(
+    page, origin, catalogue, target_course
+):
+    """Switch on one page, then walk all five and hold each against the course
+    that was chosen - the page's own call first, and the screen against that
+    call afterwards.
+
+    Made from a different page each time round because the page the switch is
+    made on is the one that reloads itself. The other four pick the course up
+    whenever they are next opened, and that is the half where a page can come
+    back wearing the new course while being built from the old one's data."""
+    chosen = course_ref(catalogue, target_course)
+
+    switch_from(open_page(page, origin), origin, chosen["title"])
+
+    verify_all_pages_on(page, chosen)
+
+
+def test_no_page_is_left_serving_the_previous_courses_data(
+    page, catalogue, target_course
+):
+    """Every page's payload taken twice, once in each course, and held apart.
+
+    The test above rules stale data out from one side: a payload has to belong
+    to the course now chosen. This one says it from the other side - what the
+    pages served for the first course is not what they serve for the second.
+
+    Home and profile have to differ, because each of them names the course it
+    was built for. The other three are allowed to coincide: two courses can
+    genuinely carry the same exams or the same empty week, and their payloads
+    have already been shown to be the new course's own."""
+    before = course_ref(catalogue, account_course(page))
+    after = course_ref(catalogue, target_course)
+
+    was = verify_all_pages_on(page, before)
+    switch_from(open_page(page, "home"), "home", after["title"])
+    now = verify_all_pages_on(page, after)
+
+    assert was["home"] != now["home"], "home served both courses the same thing"
+    assert was["profile"] != now["profile"], "profile served both courses the same thing"
+    assert now["profile"]["course_id"] == after["id"]
+
+
+# ---------------------------------------------------------------------------
+# 4c. What the endpoint refuses
+# ---------------------------------------------------------------------------
 
 
 def test_the_backend_refuses_a_course_that_does_not_exist(page):
@@ -788,6 +1028,12 @@ def test_a_switch_the_backend_rejects_leaves_the_course_alone(page, target_cours
     assert course_label(home) == before_name
     assert account_course(page) == before_name
 
+    # Not just the badge: home is asked what it is built from, so a screen that
+    # quietly moved on while the switch was refused would be caught.
+    with page.expect_response(HOME_API) as served:
+        page.goto(HOME_URL, wait_until="domcontentloaded")
+    assert served.value.json()["user"]["course_name"].strip() == before_name
+
 
 def test_the_switcher_stays_open_after_a_failed_switch_so_it_can_be_tried_again(
     page, target_course
@@ -819,3 +1065,133 @@ def test_the_switcher_stays_open_after_a_failed_switch_so_it_can_be_tried_again(
     wait_ready(home, "home")
 
     assert answer.value.status == 200
+
+
+# ---------------------------------------------------------------------------
+# 7. Premium courses
+#
+# premium_courses is the list the switcher opens on and the same list it draws
+# its Premium chips from, so it is what a chip has to be held against. Being
+# premium also shows in the data: an account sitting in a premium course is
+# served subscription_status true and its day's tasks come back flagged.
+# ---------------------------------------------------------------------------
+
+# How many ordinary courses to check for a chip they should not have. The
+# catalogue runs to hundreds and they are all the same check.
+ORDINARY_SAMPLE = 8
+
+
+@pytest.fixture
+def premium(page):
+    """The premium courses the catalogue names, as {title: id}."""
+    return premium_courses(page)
+
+
+def premium_standing(page):
+    """What the backend says about the account's standing in the course it is
+    currently in."""
+    return {
+        "subscription_status": call_api(page, "/home")["subscription_status"],
+        "is_premium": call_api(page, "/dailytasks/list")["is_premium"],
+    }
+
+
+def test_every_premium_course_is_badged_premium_in_the_full_list(page, premium):
+    """The chip is not decoration - a course wears it when premium_courses
+    names it."""
+    if not premium:
+        pytest.skip("The catalogue names no premium course")
+
+    modal = open_switcher(open_page(page, "home"))
+    modal.open_all_courses()
+
+    for title in premium:
+        modal.search(title)
+        assert modal.is_badged_premium(title), (
+            f"the premium call names {title!r} and its row carries no Premium chip"
+        )
+
+
+def test_a_course_the_premium_call_does_not_name_is_not_badged_premium(
+    page, premium, catalogue
+):
+    """And the other way round, so a chip on everything would not pass."""
+    ordinary = [title for title in catalogue if title not in premium]
+    if not ordinary:
+        pytest.skip("Every course in the catalogue is premium")
+
+    modal = open_switcher(open_page(page, "home"))
+    modal.open_all_courses()
+
+    for title in ordinary[:ORDINARY_SAMPLE]:
+        modal.search(title)
+        assert not modal.is_badged_premium(title), (
+            f"the premium call does not name {title!r} and its row wears a "
+            f"Premium chip anyway"
+        )
+
+
+def test_a_class_is_badged_premium_exactly_when_it_holds_a_premium_course(
+    page, premium
+):
+    """The badge on a class header follows the courses filed under it, for
+    every class in the list and not just the ones that carry it."""
+    modal = open_switcher(open_page(page, "home"))
+    modal.open_all_courses()
+
+    for class_name, titles in courses_by_class(page).items():
+        holds_premium = any(title in premium for title in titles)
+        assert modal.is_class_badged_premium(class_name) == holds_premium, (
+            f"{class_name!r} "
+            f"{'holds a premium course and is not badged' if holds_premium else 'holds none and is badged'}"
+        )
+
+
+def test_switching_between_two_premium_courses_carries_every_page_over(
+    page, catalogue, premium
+):
+    """Premium to premium, which is the move a paying account actually makes.
+
+    Both courses are premium, so what changes is the course's own content
+    rather than the account's standing: every page comes back built from the
+    second course, and the subscription is still on at the end of it."""
+    if len(premium) < 2:
+        pytest.skip(
+            f"The catalogue names {len(premium)} premium course(s) and this needs two"
+        )
+
+    first, second = (course_ref(catalogue, title) for title in list(premium)[:2])
+
+    home = open_page(page, "home")
+    if course_label(home) != first["title"]:
+        switch_from(home, "home", first["title"])
+    was = verify_all_pages_on(page, first)
+
+    switch_from(open_page(page, "home"), "home", second["title"])
+    now = verify_all_pages_on(page, second)
+
+    assert now["profile"]["course_id"] == second["id"]
+    assert was["home"] != now["home"], "both premium courses served the same home"
+    assert was["home"]["subscription_status"] is True
+    assert now["home"]["subscription_status"] is True
+    assert now["daily-tasks"]["is_premium"] is True
+
+
+def test_a_premium_course_and_an_ordinary_one_are_served_different_standing(
+    page, catalogue, premium
+):
+    """Being premium reaches the data and not only the chip: the same account
+    is subscribed in a premium course and is not in an ordinary one."""
+    if not premium:
+        pytest.skip("The catalogue names no premium course")
+    ordinary = [title for title in catalogue if title not in premium]
+    if not ordinary:
+        pytest.skip("Every course in the catalogue is premium")
+
+    home = open_page(page, "home")
+
+    switch_from(home, "home", list(premium)[0])
+    assert premium_standing(page) == {"subscription_status": True, "is_premium": True}
+
+    switch_from(open_page(page, "home"), "home", ordinary[0])
+    assert premium_standing(page) == {"subscription_status": False, "is_premium": False}

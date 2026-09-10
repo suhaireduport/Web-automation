@@ -20,7 +20,13 @@ from playwright.sync_api import expect
 
 from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
-from pages.practice_page import AddTopicsPage, PracticeConfigPage, PracticeQuestionPage
+from pages.practice_page import (
+    MODES,
+    RESULT_TITLES,
+    AddTopicsPage,
+    PracticeConfigPage,
+    PracticeQuestionPage,
+)
 from pages.question_library_page import QuestionLibraryPage
 from pages.question_library_section_page import searchable_snippet
 from pages.question_library_subject_page import (
@@ -301,7 +307,12 @@ def test_every_question_is_numbered(chapter_questions):
         expect(chapter_questions.get_question_numbers().nth(index)).to_have_text(
             re.compile(r"^\d+$")
         )
-        expect(chapter_questions.get_question_text(index)).not_to_be_empty()
+        # A question can be a picture with no text at all - the whole thing,
+        # options and all, is drawn - so it carries content either way.
+        question = chapter_questions.get_question_text(index)
+        assert question.inner_text().strip() != "" or question.locator("img").count(), (
+            f"question {index + 1} is neither text nor a picture"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -618,11 +629,14 @@ def test_the_topic_quiz_runs_as_a_problem_based_quick_practice(
     config = PracticeConfigPage(page)
     config.wait_for_loaded()
 
-    # Problem based is the route the picker came in on; quick practice is the
-    # mode the setup screen offers under it.
+    # Problem based is the route the picker came in on. Which mode the setup
+    # screen offers under it is the topic's own business - some topics offer
+    # Quick practice and some Problem based - so the set is held against the
+    # mode that is actually on offer rather than one written down here.
     expect(page).to_have_url(re.compile(r"/addtopic/problemBased/practice"))
     expect(config.get_selected_mode()).to_have_count(1)
-    assert config.get_selected_mode_name() == "Quick practice"
+    mode = config.get_selected_mode_name()
+    assert mode in MODES, f"the setup screen offers a mode of its own: {mode!r}"
     expect(config.get_topic_summary()).to_contain_text("1 Topics")
 
     asked = config.select_smallest_count()
@@ -633,7 +647,9 @@ def test_the_topic_quiz_runs_as_a_problem_based_quick_practice(
 
     expect(page).to_have_url(PracticeQuestionPage.URL_PATTERN)
     expect(quiz.get_title()).to_have_text(topic)
-    expect(quiz.get_subtitle()).to_have_text("Quick Practice")
+    # A set names its mode on the rules screen the same way it names it on the
+    # result screen at the end.
+    expect(quiz.get_subtitle()).to_have_text(RESULT_TITLES[mode])
     expect(quiz.get_question_total()).to_have_text(str(asked))
 
 
