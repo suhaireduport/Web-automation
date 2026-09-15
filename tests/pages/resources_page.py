@@ -63,6 +63,14 @@ class ResourcesPage:
     def click_back(self):
         self.get_back_button().click()
 
+    def get_search_button(self):
+        return self.page.locator(".rs-header .rs-icon-btn[aria-label='Search']")
+
+    def open_search(self):
+        """Search is a screen of its own, routed to from the header."""
+        self.get_search_button().click()
+        ResourceSearchPage(self.page).wait_for_loaded()
+
     # ---------- nothing to show ----------
 
     def get_empty_state(self):
@@ -193,6 +201,163 @@ class ResourceVideoPage:
     def get_content_id(self):
         """The content the route ends on, which is the id the call gave it."""
         return int(self.page.url.rstrip("/").split("/")[-1])
+
+
+# ---------------------------------------------------------------------------
+# Searching a folder
+# ---------------------------------------------------------------------------
+
+# What tapping an item on the search screen gives.
+OPENS_LOCKED = "the Premium sheet"
+OPENS_VIDEO = "the video player"
+OPENS_FILE = "a tab of its own"
+OPENS_NOTHING = "nothing"
+
+
+class ResourceSearchPage:
+    """The search a folder's header opens, one step on from the folder's route
+    at /resourceSearch.
+
+    It asks the server nothing. The screen lists every item in the folder, read
+    from the same child-resources call the folder is drawn from - every section,
+    and every subject of a folder filed under them, run together into one list -
+    and narrows that list in the browser as the box is typed into, keeping the
+    items whose title holds what was typed, whatever its case. The first place a
+    title matched is picked out, and a search that keeps nothing says so.
+
+    Tapping a result opens the item: a video routes on to ResourceVideoPage, a
+    file opens in a browser tab of its own, and an item in a premium section the
+    student's batch does not cover raises the Premium sheet instead.
+    """
+
+    URL_PATTERN = re.compile(
+        r"https://eduport-react\.pages\.dev/home/resources/\d+/[^/]+/\d+/resourceSearch$"
+    )
+
+    def __init__(self, page):
+        self.page = page
+
+    def open(self, folder):
+        """Go straight to a folder's search, as its header button would."""
+        self.page.goto(search_route(folder), wait_until="domcontentloaded")
+        self.wait_for_loaded()
+
+    def wait_for_loaded(self, timeout=30000):
+        self.get_input().wait_for(timeout=timeout)
+
+    def get_page(self):
+        return self.page.locator(".rss-page")
+
+    def get_back_button(self):
+        return self.page.locator(".rss-back-btn")
+
+    def click_back(self):
+        self.get_back_button().click()
+
+    # ---------- the box ----------
+
+    def get_input(self):
+        return self.page.locator(".rss-input")
+
+    def search(self, text):
+        self.get_input().fill(text)
+
+    def get_clear_button(self):
+        """Only there once something has been typed."""
+        return self.page.locator(".rss-clear")
+
+    def clear(self):
+        self.get_clear_button().click()
+
+    # ---------- results ----------
+
+    def get_results(self):
+        return self.page.locator(".rss-tile")
+
+    def get_result_titles(self):
+        return [
+            normalise(title)
+            for title in self.page.locator(".rss-tile-title").all_inner_texts()
+        ]
+
+    def get_result_icons(self):
+        return self.page.locator(".rss-tile-icon")
+
+    def get_matches(self):
+        """The part of each title the search matched. Only drawn while there is
+        something in the box, one per result."""
+        return self.page.locator(".rss-tile-title .rss-match")
+
+    def get_match_texts(self):
+        return [text.strip() for text in self.get_matches().all_inner_texts()]
+
+    def open_result(self, index):
+        self.get_results().nth(index).click()
+
+    # ---------- nothing matched ----------
+
+    def get_empty_state(self):
+        return self.page.locator(".rss-empty")
+
+    def get_empty_title(self):
+        return self.page.locator(".rss-empty-title")
+
+    def get_empty_subtitle(self):
+        return self.page.locator(".rss-empty-sub")
+
+    # ---------- the Premium sheet a locked result raises ----------
+
+    def get_lock_sheet(self):
+        return self.page.locator(".clm-sheet")
+
+    def get_lock_title(self):
+        return self.page.locator(".clm-title")
+
+
+def search_route(folder):
+    """Where a folder's search lives: one step on from the folder's route."""
+    return f"{route_to(folder)}/resourceSearch"
+
+
+def searchable_items(body):
+    """Every item a folder's search offers, in the order the screen lists them,
+    each with the section it sits in.
+
+    The search walks the folder call the way the folder does - every subject in
+    turn on a folder filed under subjects, the sections alone otherwise - but
+    lays everything out in one list rather than behind tabs."""
+    subjects = range(len(body["results"])) if is_filed_under_subjects(body) else [0]
+    return [
+        (section, content)
+        for subject in subjects
+        for section in sections_in(body, subject)
+        for content in contents_in(section)
+    ]
+
+
+def search_matches(items, text):
+    """The items a search keeps: those whose title holds the text, whatever its
+    case, with the text trimmed first. An empty box keeps everything."""
+    wanted = text.strip().lower()
+    return [
+        (section, content)
+        for section, content in items
+        if wanted in (content.get("title") or "").lower()
+    ]
+
+
+def opens_as(body, section, content):
+    """What tapping an item on the search screen gives, by the screen's own
+    rule. An item in a premium section the student's batch does not cover is
+    refused before anything else is looked at, and an item counts as a video
+    when it carries a stream link or a YouTube id."""
+    if section.get("is_resource_premium") and not body.get("is_batch_premium"):
+        return OPENS_LOCKED
+    if content.get("stream_link") or content.get("youtube_id"):
+        return OPENS_VIDEO
+    if content.get("file"):
+        return OPENS_FILE
+    return OPENS_NOTHING
 
 
 # ---------------------------------------------------------------------------

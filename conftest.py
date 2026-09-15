@@ -29,7 +29,7 @@ DEFAULT_OTP = "4305"
 # Numbers belonging to a single test - a throwaway for a fresh signup, an
 # account in a particular subscription state, a string being fed to the login
 # box to check what it accepts - stay in the test that needs them.
-STUDENT_MOBILE = "9876543210"
+STUDENT_MOBILE = "9037929697"
 SECOND_STUDENT_MOBILE = "8893963137"
 
 # Headless by default because it is much faster. Run with HEADED=1 to watch.
