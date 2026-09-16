@@ -21,7 +21,7 @@ from playwright.sync_api import expect
 from pages.login_page import LoginPage
 from pages.otp_page import OtpPage
 from pages.home_page import HomePage
-from pages.signup_page import SignupPage
+from pages.signup_page import PersonalisingPage, SignupPage
 from pages.leaderboard_page import call_api
 
 OTP = "4305"
@@ -305,3 +305,73 @@ def test_completing_signup_creates_the_account_with_the_entered_details(page, si
     expect(home.get_greeting()).to_have_text(f"Hello, {name}", timeout=30000)
     expect(home.get_course_button()).to_have_text(course_title)
     expect(home.get_subjects().first).to_be_visible()
+
+
+# ---------------------------------------------------------------------------
+# Step 4: the summary, and the personalising screen it hands over to
+# ---------------------------------------------------------------------------
+
+def reach_summary_step(page, signup_page):
+    """Carry the wizard through to the summary that saving the avatar lands on.
+
+    Skip is what creates the account, so this leaves one behind, the same as
+    the completion test above. Hands back the name and the course it was made
+    with."""
+    name = random_name()
+    signup_page.enter_name(name)
+    signup_page.choose_gender("Male")
+    signup_page.submit_details()
+    signup_page.get_confirm_class_button().wait_for(timeout=30000)
+
+    class_title, course_title, _ = pick_class_with_courses(page)
+    signup_page.expand_class(class_title)
+    signup_page.choose_course(course_title)
+    signup_page.confirm_class()
+    signup_page.get_set_profile_button().wait_for(timeout=30000)
+
+    with page.expect_response(PROFILE_UPDATE_API) as answer:
+        signup_page.skip()
+    assert answer.value.status == 200, f"profile/update answered {answer.value.status}"
+
+    signup_page.wait_for_summary()
+    return name, course_title
+
+
+def test_start_learning_hands_the_new_account_over_to_home(page, signup_page):
+    """Saving the avatar does not leave the wizard: it creates the account and
+    moves on to a summary of it, and Start learning is what leaves. That goes
+    to the personalising screen, which carries nothing to press and replaces
+    itself with home a couple of seconds later, showing the account just made.
+    """
+    name, course_title = reach_summary_step(page, signup_page)
+
+    # The step it is reached from: the account as the wizard has just made it.
+    expect(page).to_have_url(NEW_USER_URL)
+    expect(signup_page.get_summary_name()).to_have_text(name)
+    expect(signup_page.get_summary_course_label()).to_have_text("Course")
+    expect(signup_page.get_summary_course()).to_have_text(course_title)
+    expect(signup_page.get_summary_avatar()).to_be_visible()
+    expect(signup_page.get_start_learning_button()).to_be_enabled()
+
+    signup_page.start_learning()
+
+    page.wait_for_url(PersonalisingPage.URL, timeout=15000)
+    personalising = PersonalisingPage(page)
+    personalising.get_page().wait_for(timeout=5000)
+    # Read in one hop: the screen is only up for about two seconds, so a
+    # reading per element can end up taken after it has gone.
+    showing = personalising.read()
+
+    assert showing["page"], showing
+    assert showing["text"] == PersonalisingPage.TEXT, showing
+    assert showing["icon"] and showing["bar"] and showing["fill"], showing
+
+    # Nothing is pressed here: the screen hands over on its own.
+    page.wait_for_url(HOME_URL, timeout=30000)
+    home = HomePage(page)
+    expect(home.get_greeting()).to_have_text(f"Hello, {name}", timeout=30000)
+    expect(home.get_course_button()).to_have_text(course_title)
+
+    # It replaces itself rather than stacking, so there is no going back to it.
+    page.go_back()
+    expect(page).not_to_have_url(PersonalisingPage.URL)

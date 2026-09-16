@@ -191,7 +191,9 @@ def test_checkpoint_quiz_after_finishing_the_video(page, checkpoint_page):
     # A checkpoint question can be a picture with no text at all - the options
     # are lettered A to D and the choices themselves are drawn in it.
     question = checkpoint_page.get_quiz_question()
-    assert question.inner_text().strip() != "" or question.locator("img").count(), (
+    assert question.inner_text().strip() != "" or (
+        checkpoint_page.get_quiz_question_images().count()
+    ), (
         "the question is neither text nor a picture"
     )
 

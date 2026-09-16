@@ -75,7 +75,7 @@ def test_date_cell_shows_day_name_and_number(daily_tasks_page):
 
 
 def test_select_a_different_date(daily_tasks_page):
-    selected_day = daily_tasks_page.get_selected_date().locator(".dt-day-num")
+    selected_day = daily_tasks_page.get_selected_day_number()
     expect(selected_day).not_to_have_text(
         daily_tasks_page.get_day_number(0).inner_text()
     )
@@ -242,7 +242,7 @@ def test_task_groups_match_the_daily_tasks_api_for_the_selected_date(page):
     daily_tasks, results = open_daily_tasks_with_payload(page)
 
     selected = int(
-        daily_tasks.get_selected_date().locator(".dt-day-num").inner_text().strip()
+        daily_tasks.get_selected_day_number().inner_text().strip()
     )
     entry = next((e for e in results if day_of(e["date"]) == selected), None)
     if entry is None:

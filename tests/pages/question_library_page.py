@@ -126,3 +126,6 @@ class QuestionLibraryPage:
         return self.get_info_cards().filter(
             has=self.page.locator(".qlh-card-title").filter(has_text=pattern)
         )
+
+    def get_info_card_description(self, title):
+        return self.get_info_card(title).locator(".qlh-card-desc")

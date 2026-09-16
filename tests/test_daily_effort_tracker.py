@@ -360,8 +360,8 @@ def test_the_effort_tracker_is_not_divided_by_subject(page, effort):
     filter to pick one with, and the call carries no subject to pick. A
     subject breakdown arriving later should fail here and be given tests of
     its own."""
-    for subject_control in (".an-subject-col", ".at-tab", ".st-tab", ".at-filter"):
-        expect(page.locator(subject_control)).to_have_count(0)
+    for subject_control in effort.get_subject_controls():
+        expect(subject_control).to_have_count(0)
 
     entry = effort_for(page, datetime.date.today(), 1)[0]
     assert set(entry) == {"date", "effort_index"} | set(LEGEND_FIELDS.values()), entry

@@ -296,6 +296,10 @@ class SectionQuestionsPage:
     def get_question_text(self, index):
         return self.get_question(index).locator(".qq-html").first
 
+    def get_question_images(self, index):
+        """A question can be a picture with no text at all."""
+        return self.get_question_text(index).locator("img")
+
     def get_question_texts(self):
         return [normalise(text) for text in self.get_questions().all_inner_texts()]
 

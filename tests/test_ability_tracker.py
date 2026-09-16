@@ -254,7 +254,7 @@ def test_the_chapters_match_the_subject_the_call_answered(ability, subjects):
     chapters = subjects[0]["chapters"]
 
     expect(ability.get_chapters()).to_have_count(len(chapters))
-    expect(ability.get_chapters().locator(".at-chapter-info strong")).to_have_text(
+    expect(ability.get_chapter_title_labels()).to_have_text(
         [normalise(chapter["title"]) for chapter in chapters]
     )
     assert ability.get_chapter_percentages() == [
@@ -289,7 +289,7 @@ def test_a_chapter_bar_is_drawn_to_its_own_index_and_band(ability, subjects):
             expect(fill).to_have_count(0)
             continue
 
-        assert fill.evaluate("el => el.style.width") == (
+        assert ability.get_chapter_bar_width(index) == (
             f"{min(chapter['ability_index'], 100)}%"
         )
         expect(fill).to_have_class(

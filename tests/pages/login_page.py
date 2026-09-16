@@ -73,6 +73,14 @@ class LoginPage:
         self.enter_mobile(mobile_number)
         self.click_continue()
 
+    def get_send_spinner(self):
+        """The button gives up its label for a spinner while the send is out."""
+        return self.page.locator(".dl-primary-btn .dl-spinner")
+
+    def press_enter(self):
+        """Enter in the phone box sends the code, the same as the button."""
+        self.get_mobile_input().press("Enter")
+
     # ---------- country selector ----------
 
     def get_country_button(self):
@@ -96,6 +104,24 @@ class LoginPage:
 
     def get_country_items(self):
         return self.page.locator(".dl-country-item")
+
+    def get_active_country_item(self):
+        """The country the box is currently set to, marked in the open menu."""
+        return self.page.locator(".dl-country-item--active")
+
+    def get_country_item_codes(self):
+        """The dial code on every country row the open menu is listing."""
+        return self.page.locator(".dl-country-item-code")
+
+    def get_country_empty_message(self):
+        """Shown in place of the list when the search matches no country."""
+        return self.page.locator(".dl-country-empty")
+
+    def close_country_menu(self):
+        """Tap away from the menu. It closes on a press outside itself rather
+        than on a button of its own."""
+        self.page.locator(".dl-hero").click()
+        self.get_country_menu().wait_for(state="hidden")
 
     def search_country(self, text):
         self.get_country_search().fill(text)
@@ -126,6 +152,21 @@ class LoginPage:
 
     def get_contact_sheet_title(self):
         return self.page.locator(".cu-title")
+
+    def get_contact_options(self):
+        """One row per channel the contact call offers, in the order served."""
+        return self.page.locator(".cu-option")
+
+    def get_contact_option_labels(self):
+        return [text.strip() for text in self.page.locator(".cu-option-label").all_inner_texts()]
+
+    def close_contact_sheet_with_escape(self):
+        self.page.keyboard.press("Escape")
+
+    def close_contact_sheet_with_backdrop(self):
+        """The sheet sits on an overlay that dismisses it; the sheet itself
+        swallows the press, so the corner of the overlay is what is tapped."""
+        self.get_contact_sheet().click(position={"x": 5, "y": 5})
 
     # ---------- terms ----------
 

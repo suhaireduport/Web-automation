@@ -71,6 +71,24 @@ def timer_route(total, taken=0, task_id=0, study_type=1, study_title="Study"):
     return f"{SelfLearnTimerPage.URL}?{query}"
 
 
+# The browser works out when a session ends from its own clock, so the reading
+# on screen is held against the same working-out done in the browser, a moment
+# either side, rather than against the machine running the test.
+END_TIMES = """() => {
+    const clock = document.querySelector('.slt-time').textContent.trim();
+    const end = document.querySelector('.slt-endtime span').textContent.trim();
+    const left = clock.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0);
+    const at = offset => {
+        const when = new Date(Date.now() + (left + offset) * 1000);
+        const minutes = String(when.getMinutes()).padStart(2, '0');
+        const half = when.getHours() >= 12 ? 'PM' : 'AM';
+        const hours = String(when.getHours() % 12 || 12).padStart(2, '0');
+        return `${hours}:${minutes} ${half}`;
+    };
+    return {end, expected: [at(-2), at(0), at(2)]};
+}"""
+
+
 # The clock read in the browser, so a reading and whatever is compared with it
 # are taken in the same instant.
 READ_CLOCK = (
@@ -179,6 +197,10 @@ class SelfLearnPage:
     def get_keep_screen_on(self):
         return self.page.locator(".sl-wake")
 
+    def get_keep_screen_on_indicator(self):
+        """Present only while Keep screen on is switched on."""
+        return self.page.locator(".sl-wake-on")
+
     def is_keep_screen_on(self):
         return self.page.locator(".sl-wake-text.sl-wake-on").count() > 0
 
@@ -245,6 +267,11 @@ class SelfLearnTimerPage:
         """When the session will end if left running: "12:03 PM"."""
         return self.page.locator(".slt-endtime span")
 
+    def read_end_times(self):
+        """The end time on screen, and what it should read give or take two
+        seconds, both worked out in the browser: {end, expected: [...]}."""
+        return self.page.evaluate(END_TIMES)
+
     def get_study(self):
         return self.page.locator(".slt-study")
 
@@ -298,6 +325,10 @@ class SelfLearnTimerPage:
 
     def get_keep_screen_on(self):
         return self.page.locator(".slt-wake")
+
+    def get_keep_screen_on_indicator(self):
+        """Present only while Keep screen on is switched on."""
+        return self.page.locator(".slt-wake-on")
 
     def is_keep_screen_on(self):
         return self.page.locator(".slt-wake-text.slt-wake-on").count() > 0

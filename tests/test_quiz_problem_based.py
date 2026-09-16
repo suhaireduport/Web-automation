@@ -180,9 +180,9 @@ def test_the_question_screen_carries_the_question_its_options_and_its_controls(p
         pytest.skip((practised or {}).get("reason", NOTHING_TO_PRACTISE))
     practice.wait_for_question()
 
-    assert practice.get_question_text() != "" or practice.get_question().locator(
-        "img"
-    ).count(), "the question is neither text nor a picture"
+    assert practice.get_question_text() != "" or practice.get_question_images().count(), (
+        "the question is neither text nor a picture"
+    )
     assert practice.get_options().count() >= 2
 
     expect(practice.get_back_button()).to_be_visible()

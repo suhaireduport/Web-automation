@@ -99,22 +99,30 @@ def _contexts():
         context.close()
 
 
+# The Page Objects live under tests/, which pytest only puts on sys.path once it
+# starts collecting test modules - after this file has been imported - so they
+# are imported where they are used rather than at the top.
+
+
 def _dismiss_intro_splash(page):
     """Close the intro splash if this page gets one.
 
     Optional by design: an account that has already dismissed it carries the
     flag, so the usual case costs nothing and nothing here waits on a splash
     that is never coming."""
+    from pages.home_page import HomePage
+
     if page.evaluate("key => localStorage.getItem(key)", SPLASH_SEEN_KEY):
         return
 
-    splash = page.locator(".qlob-overlay")
+    home_page = HomePage(page)
+    splash = home_page.get_intro_splash()
     try:
         splash.wait_for(timeout=SPLASH_TIMEOUT)
     except Exception:
         return
 
-    page.locator(".qlob-close").click()
+    home_page.get_intro_close().click()
     splash.wait_for(state="detached")
 
 
@@ -131,10 +139,14 @@ SEND_OTP_RETRY_MS = 20000
 
 def _sign_in(page, mobile, otp):
     """Take a fresh page from the login screen through to home, signed in."""
+    from pages.login_page import LoginPage
+    from pages.otp_page import OtpPage
+
+    login_page = LoginPage(page)
     for attempt in range(SEND_OTP_ATTEMPTS):
         page.goto(LOGIN_URL)
-        page.locator(".dl-phone-input").fill(mobile)
-        page.get_by_role("button", name="Send OTP").click()
+        login_page.enter_mobile(mobile)
+        login_page.get_send_otp_button().click()
         try:
             page.wait_for_url(OTP_URL, timeout=8000)
             break
@@ -149,9 +161,7 @@ def _sign_in(page, mobile, otp):
     # The code is four boxes that take keystrokes rather than a value set on
     # them, and the form submits itself the moment the fourth digit lands -
     # there is no button to press.
-    page.locator(".otp-box").first.wait_for()
-    page.locator(".otp-box").first.click()
-    page.keyboard.type(otp)
+    OtpPage(page).enter_otp(otp)
     page.wait_for_url(HOME_URL)
 
 

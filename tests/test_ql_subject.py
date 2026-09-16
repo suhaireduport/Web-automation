@@ -310,7 +310,9 @@ def test_every_question_is_numbered(chapter_questions):
         # A question can be a picture with no text at all - the whole thing,
         # options and all, is drawn - so it carries content either way.
         question = chapter_questions.get_question_text(index)
-        assert question.inner_text().strip() != "" or question.locator("img").count(), (
+        assert question.inner_text().strip() != "" or (
+            chapter_questions.get_question_images(index).count()
+        ), (
             f"question {index + 1} is neither text nor a picture"
         )
 
@@ -589,10 +591,7 @@ def test_a_topic_quiz_carries_the_subject_topic_and_chapter_it_was_built_from(
     topic = re.sub(
         r"^\d+\.\s*",
         "",
-        topic_picker.get_practicable_topics()
-        .first.locator(".atp-topic-title")
-        .inner_text()
-        .strip(),
+        topic_picker.get_first_practicable_topic_title().inner_text().strip(),
     )
     topic_picker.get_practicable_topics().first.click()
     expect(topic_picker.get_selection_label()).to_contain_text("1")
@@ -618,10 +617,7 @@ def test_the_topic_quiz_runs_as_a_problem_based_quick_practice(
     topic = re.sub(
         r"^\d+\.\s*",
         "",
-        topic_picker.get_practicable_topics()
-        .first.locator(".atp-topic-title")
-        .inner_text()
-        .strip(),
+        topic_picker.get_first_practicable_topic_title().inner_text().strip(),
     )
     topic_picker.get_practicable_topics().first.click()
     topic_picker.click_continue()

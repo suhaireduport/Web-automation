@@ -121,6 +121,15 @@ class EffortTrackerPage:
     def get_page(self):
         return self.page.locator(".et-page")
 
+    def get_subject_controls(self):
+        """The controls the other analysis screens pick a subject with - the
+        subject column on Analysis, the Ability and Syllabus tracker tabs and
+        the Ability filter - one locator each, for checking none is here."""
+        return [
+            self.page.locator(selector)
+            for selector in (".an-subject-col", ".at-tab", ".st-tab", ".at-filter")
+        ]
+
     # ---------- header ----------
 
     def get_title(self):

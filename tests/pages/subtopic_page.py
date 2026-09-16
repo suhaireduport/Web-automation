@@ -439,6 +439,14 @@ class SubtopicPage:
     def get_quiz_question(self):
         return self.page.locator(".pl-quiz-question")
 
+    def get_quiz_question_images(self):
+        """A checkpoint question can be a picture with no text at all."""
+        return self.get_quiz_question().locator("img")
+
+    def get_quiz_dont_know_button(self):
+        """I don't know on the quiz card. A checkpoint does not offer one."""
+        return self.get_quiz_card().get_by_role("button", name="I don't know")
+
     def get_quiz_options(self):
         return self.page.locator(".pl-quiz-option")
 
@@ -459,6 +467,10 @@ class SubtopicPage:
         """The note pen on the quiz card. The bookmark sits in the card header
         and the note floats over the options, so they are two locators."""
         return self.page.locator(".pl-note-fab")
+
+    def get_note_editor(self):
+        """Whatever the note pen opens to write in."""
+        return self.page.locator("textarea, [contenteditable='true']")
 
     def quiz_is_answered(self):
         """A checkpoint question is answered once and stays answered: reopening

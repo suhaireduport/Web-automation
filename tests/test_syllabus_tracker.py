@@ -293,7 +293,7 @@ def test_the_chapters_match_the_subject_the_call_answered(syllabus, subjects):
     chapters = subjects[0]["chapters"]
 
     expect(syllabus.get_chapters()).to_have_count(len(chapters))
-    expect(syllabus.get_chapters().locator(".st-chapter-info strong")).to_have_text(
+    expect(syllabus.get_chapter_title_labels()).to_have_text(
         [normalise(chapter["title"]) for chapter in chapters]
     )
     assert syllabus.get_chapter_counts() == [
@@ -304,7 +304,7 @@ def test_the_chapters_match_the_subject_the_call_answered(syllabus, subjects):
         done, total = chapter_progress(chapter)
         fill = syllabus.get_chapter_bar_fill(index)
         if percent(done, total):
-            assert fill.evaluate("el => el.style.width") == f"{percent(done, total)}%"
+            assert syllabus.get_chapter_bar_width(index) == f"{percent(done, total)}%"
         else:
             expect(fill).to_have_count(0)
 

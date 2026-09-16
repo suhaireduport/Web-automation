@@ -1,5 +1,7 @@
 import re
 
+from pages.practice_page import PracticeQuestionPage
+
 
 # The subtopic ring is two SVG circles: a grey track that is always drawn, and
 # an arc for the watched part whose stroke-dasharray is "<filled> <gap>" over
@@ -87,6 +89,12 @@ class TopicPage:
 
     def get_topic_header(self, index):
         return self.get_topic(index).locator(".tp-topic-header")
+
+    def get_topic_header_progress_bar(self, index):
+        return self.get_topic_header(index).locator(".tp-progress-bar")
+
+    def get_topic_header_progress_ring(self, index):
+        return self.get_topic_header(index).locator(".tp-progress-ring-wrap")
 
     def get_topic_number(self, index):
         return self.get_topic(index).locator(".tp-topic-num")
@@ -243,3 +251,179 @@ class TopicPage:
 
     def click_start_here(self):
         self.get_start_here_button().click()
+
+    # ---------- topic quizzes ----------
+    #
+    # A topic that carries quizzes lists one row per quiz under its subtopics,
+    # and the row names which quiz it is. Tapping one opens the topic quiz on a
+    # route of its own.
+
+    def get_quiz_rows(self, index=None):
+        if index is None:
+            return self.page.locator(".tp-quiz-item")
+        return self.get_topic(index).locator(".tp-quiz-item")
+
+    def get_quiz_row_labels(self, index=None):
+        return [text.strip() for text in self.get_quiz_rows(index).all_inner_texts()]
+
+    def get_quiz_rows_by_topic(self):
+        """Which quizzes each topic lists, as {topic title: [label, ...]}.
+
+        Read in one hop rather than a call per topic, and the number a topic is
+        drawn with is dropped, because the chapter call gives the same topic
+        without one. Topics listing no quiz are left out."""
+        listed = self.page.evaluate(
+            """() => [...document.querySelectorAll('.tp-topic')].map(topic => [
+                topic.querySelector('.tp-topic-title')?.textContent ?? '',
+                [...topic.querySelectorAll('.tp-quiz-item')].map(row => row.textContent.trim()),
+            ])"""
+        )
+        return {
+            re.sub(r"^\s*\d+\.\s*", "", title).strip(): rows
+            for title, rows in listed
+            if rows
+        }
+
+    def get_quiz_row(self, topic_title, label):
+        """One topic's quiz row, by the label it carries.
+
+        The title is matched inside the card rather than as all of it, because
+        the card carries the topic's number and its subtopics as well."""
+        return (
+            self.page.locator(".tp-topic")
+            .filter(has_text=topic_title.strip())
+            .first.locator(".tp-quiz-item")
+            .filter(has_text=label)
+            .first
+        )
+
+    def open_quiz(self, topic_title, label):
+        self.get_quiz_row(topic_title, label).click()
+
+
+# ---------------------------------------------------------------------------
+# The topic quiz a quiz row opens
+# ---------------------------------------------------------------------------
+
+# The two quizzes a topic can carry, numbered as the chapter call numbers them
+# in quiz_types and as the route names them in qt.
+PROBLEM_BASED = 1
+QUICK_PRACTICE = 5
+
+# What each is called on the topic list and on the quiz itself, what the rules
+# sheet heads itself with, and the call its questions come from.
+QUIZ_ROW_LABELS = {
+    PROBLEM_BASED: "Problem Based Questions",
+    QUICK_PRACTICE: "Quick Practice Questions",
+}
+QUIZ_MODES = {PROBLEM_BASED: "Problem Practice", QUICK_PRACTICE: "Quick Practice"}
+QUIZ_RULES_HEADINGS = {
+    PROBLEM_BASED: "Problem-Based Questions",
+    QUICK_PRACTICE: "Quick practice",
+}
+QUIZ_APIS = {
+    PROBLEM_BASED: "/study-quiz/problem-quiz",
+    QUICK_PRACTICE: "/study-quiz/non-adaptive-quiz",
+}
+
+# What the intro says about the way each quiz behaves.
+QUIZ_NOTES = {
+    PROBLEM_BASED: "Get one right, and you move forward",
+    QUICK_PRACTICE: "These questions are not adaptive",
+}
+
+# How many rewards the rules sheet publishes.
+REWARD_ROWS = 5
+
+
+class TopicQuizPage(PracticeQuestionPage):
+    """The quiz a topic carries, opened from its row on the topic list.
+
+    It is the screen a practice runs on - the intro, the questions and the
+    result are the same .tq-* markup - so the reading of it is inherited. What
+    is its own is the route, which names the topic and carries the quiz in qt,
+    and where the questions come from: a study-quiz call against the topic
+    rather than a practice-quiz call against a task.
+
+    Opening it writes nothing. The first answer submitted is the first write,
+    so a test that only reads the screen leaves the topic as it found it.
+    """
+
+    URL_PATTERN = re.compile(
+        r"https://eduport-react\.pages\.dev/home/subject/\d+/[^/]+/topics/\d+"
+        r"/topic_quiz/(\d+)/[^/?]+\?.*qt=(\d+)"
+    )
+
+    @staticmethod
+    def route_parts(url):
+        """The topic and the quiz a route names, as (topic id, quiz type)."""
+        found = TopicQuizPage.URL_PATTERN.search(url)
+        return (int(found.group(1)), int(found.group(2))) if found else (None, None)
+
+    # ---------- the intro ----------
+
+    def wait_for_intro(self, timeout=30000):
+        self.get_take_test_button().wait_for(timeout=timeout)
+
+    def get_info_box(self):
+        """The note under the scoring, which says how the quiz behaves."""
+        return self.page.locator(".tq-info-box")
+
+    def take_test(self):
+        """Start the quiz and wait for its first question.
+
+        Overrides the practice screen's own, which waits for options: a topic
+        quiz can open on a question answered by typing, and that one has
+        none."""
+        self.get_take_test_button().click()
+        self.get_answer_controls().first.wait_for(timeout=30000)
+
+    # ---------- the rules sheet ----------
+
+    def get_help_button(self):
+        return self.page.locator(".tq-help")
+
+    def open_rules(self):
+        self.get_help_button().click()
+        self.get_rules_sheet().wait_for()
+
+    def get_rules_overlay(self):
+        return self.page.locator(".qrs-overlay")
+
+    def get_rules_sheet(self):
+        return self.page.locator(".qrs-sheet")
+
+    def get_rules_heading(self):
+        return self.page.locator(".qrs-heading")
+
+    def get_rules_note(self):
+        return self.page.locator(".qrs-bullet-text")
+
+    def get_rules_rewards(self):
+        return self.page.locator(".qrs-reward-row")
+
+    def get_rules_reward_texts(self):
+        return [text.strip() for text in self.page.locator(".qrs-reward-text").all_inner_texts()]
+
+    def close_rules(self):
+        """The sheet carries no close button of its own; tapping the overlay
+        beside it is what dismisses it."""
+        self.get_rules_overlay().click(position={"x": 5, "y": 5})
+        self.get_rules_overlay().wait_for(state="detached")
+
+    # ---------- the questions ----------
+
+    def get_quiz_title(self):
+        """The topic the questions belong to, in the header of the quiz."""
+        return self.page.locator(".tq-quiz-title")
+
+    def get_choose_count(self):
+        return self.page.locator(".tq-choose-num")
+
+    def get_numeric_input(self):
+        return self.page.locator(".tq-numeric-input input")
+
+    def get_answer_controls(self):
+        """Whatever the question on screen offers as a way of answering it:
+        options to choose from, or a box to type into."""
+        return self.page.locator(".tq-option, .tq-numeric-input input")

@@ -220,11 +220,20 @@ class SyllabusTrackerPage:
             for title in self.page.locator(".st-chapter-info strong").all_inner_texts()
         ]
 
+    def get_chapter_title_labels(self):
+        """The chapter titles as elements, one per chapter card, for assertions
+        that wait on the text."""
+        return self.get_chapters().locator(".st-chapter-info strong")
+
     def get_chapter_counts(self):
         return [count.strip() for count in self.page.locator(".st-chapter-pct").all_inner_texts()]
 
     def get_chapter_bar_fill(self, index):
         return self.get_chapter(index).locator(".st-chapter-bar-fill")
+
+    def get_chapter_bar_width(self, index):
+        """The fill's inline width as written, e.g. "42%"."""
+        return self.get_chapter_bar_fill(index).evaluate("el => el.style.width")
 
     def expand_chapter(self, index):
         self.get_chapter(index).locator(".st-chapter-header").click()

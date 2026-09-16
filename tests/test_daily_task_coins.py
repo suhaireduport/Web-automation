@@ -369,7 +369,7 @@ def open_daily_tasks_with_payload(page):
     daily_tasks.wait_for_tasks_loaded()
 
     selected = int(
-        daily_tasks.get_selected_date().locator(".dt-day-num").inner_text().strip()
+        daily_tasks.get_selected_day_number().inner_text().strip()
     )
     day = next(
         (

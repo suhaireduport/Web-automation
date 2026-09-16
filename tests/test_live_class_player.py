@@ -419,10 +419,7 @@ def test_watch_now_on_a_daily_tasks_live_card_opens_the_player(page):
     page.goto(DailyTasksPage.URL, wait_until="domcontentloaded")
     tasks = DailyTasksPage(page)
     tasks.wait_for_tasks_loaded()
-    card = tasks.get_live_cards().filter(
-        has=page.locator(".dt-live-title", has_text=normalise(live["title"]))
-    ).first
-    card.locator(".dt-live-watch").click()
+    tasks.click_watch_now_on(normalise(live["title"]))
 
     expect(page).to_have_url(re.compile(rf"/tasks/live/{live['id']}/"))
     player = LivePlayerPage(page)

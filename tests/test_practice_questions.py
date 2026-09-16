@@ -254,16 +254,16 @@ def test_the_question_screen_shows_the_question_and_its_options(question_screen)
 
     # A question, and an option under it, can be a picture rather than words,
     # so what is asked for is that something was drawn - not that it reads.
-    assert practice.get_question_text() != "" or practice.get_question().locator(
-        "img"
-    ).count(), "the question is neither text nor a picture"
+    assert practice.get_question_text() != "" or practice.get_question_images().count(), (
+        "the question is neither text nor a picture"
+    )
 
     assert practice.get_options().count() >= 2
     assert practice.get_option_letters().count() == practice.get_options().count()
 
     for index in range(practice.get_options().count()):
         option = practice.get_option(index)
-        assert option.inner_text().strip() or option.locator("img").count(), (
+        assert option.inner_text().strip() or practice.get_option_images(index).count(), (
             f"option {index} is neither text nor a picture"
         )
 
@@ -349,7 +349,7 @@ def test_the_explanation_opens_once_the_question_is_answered(question_screen):
 
     practice.get_explanation_button().click()
 
-    expect(practice.page.locator(".tq-exp-body")).to_be_visible()
+    expect(practice.get_explanation_body()).to_be_visible()
 
 
 # ---------------------------------------------------------------------------

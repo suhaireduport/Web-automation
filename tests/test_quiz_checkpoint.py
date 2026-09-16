@@ -185,7 +185,7 @@ def test_the_card_shows_a_question_and_its_options(page):
         pytest.skip(found)
 
     question = found.get_quiz_question()
-    assert question.inner_text().strip() != "" or question.locator("img").count(), (
+    assert question.inner_text().strip() != "" or found.get_quiz_question_images().count(), (
         "the question is neither text nor a picture"
     )
     assert found.get_quiz_options().count() >= 2
@@ -219,8 +219,7 @@ def test_the_checkpoint_offers_no_way_to_pass_on_a_question(page):
     if isinstance(found, str):
         pytest.skip(found)
 
-    card = found.get_quiz_card()
-    assert card.get_by_role("button", name="I don't know").count() == 0
+    assert found.get_quiz_dont_know_button().count() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +290,7 @@ def test_the_note_control_on_the_card_opens_something_to_write_in(
     answered_checkpoint.get_quiz_note_button().click()
     page.wait_for_timeout(2500)
 
-    assert page.locator("textarea, [contenteditable='true']").count(), (
+    assert answered_checkpoint.get_note_editor().count(), (
         "the note control opened nothing that can be written in"
     )
 

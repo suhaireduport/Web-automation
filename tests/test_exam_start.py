@@ -344,9 +344,7 @@ def test_instructions_page_is_responsive(page, instructions, width, height):
 
     expect(instructions.get_exam_name()).to_be_visible()
     expect(instructions.get_start_exam_button()).to_be_visible()
-    assert page.evaluate(
-        "() => document.documentElement.scrollWidth <= window.innerWidth"
-    )
+    assert instructions.fits_viewport_width()
 
 
 def test_exam_list_shows_a_loading_indicator_while_it_loads(page):

@@ -49,23 +49,6 @@ SELF_LEARN_GROUP = "Self Learn"
 # the save it would make is answered here like every other.
 SERVED_TASK_ID = 990001
 
-# The browser works out when a session ends from its own clock, so the reading
-# on screen is held against the same working-out done in the browser, a moment
-# either side, rather than against the machine running the test.
-END_TIMES = """() => {
-    const clock = document.querySelector('.slt-time').textContent.trim();
-    const end = document.querySelector('.slt-endtime span').textContent.trim();
-    const left = clock.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0);
-    const at = offset => {
-        const when = new Date(Date.now() + (left + offset) * 1000);
-        const minutes = String(when.getMinutes()).padStart(2, '0');
-        const half = when.getHours() >= 12 ? 'PM' : 'AM';
-        const hours = String(when.getHours() % 12 || 12).padStart(2, '0');
-        return `${hours}:${minutes} ${half}`;
-    };
-    return {end, expected: [at(-2), at(0), at(2)]};
-}"""
-
 
 @pytest.fixture
 def page(login_as):
@@ -195,10 +178,10 @@ def test_keep_screen_on_turns_over_on_the_setup(setup):
     assert setup.is_keep_screen_on() is False
 
     setup.toggle_keep_screen_on()
-    expect(setup.page.locator(".sl-wake-on")).to_have_count(1)
+    expect(setup.get_keep_screen_on_indicator()).to_have_count(1)
 
     setup.toggle_keep_screen_on()
-    expect(setup.page.locator(".sl-wake-on")).to_have_count(0)
+    expect(setup.get_keep_screen_on_indicator()).to_have_count(0)
 
 
 def test_play_opens_the_timer_for_the_chosen_duration_and_study(page, setup):
@@ -241,7 +224,7 @@ def test_the_timer_names_the_study_it_is_timing(page, timer):
 
 
 def test_the_end_time_is_now_plus_what_is_left(timer):
-    reading = timer.page.evaluate(END_TIMES)
+    reading = timer.read_end_times()
 
     assert reading["end"] in reading["expected"], reading
 
@@ -277,10 +260,10 @@ def test_keep_screen_on_turns_over_on_the_timer(timer):
     assert timer.is_keep_screen_on() is False
 
     timer.toggle_keep_screen_on()
-    expect(timer.page.locator(".slt-wake-on")).to_have_count(1)
+    expect(timer.get_keep_screen_on_indicator()).to_have_count(1)
 
     timer.toggle_keep_screen_on()
-    expect(timer.page.locator(".slt-wake-on")).to_have_count(0)
+    expect(timer.get_keep_screen_on_indicator()).to_have_count(0)
 
 
 # ---------------------------------------------------------------------------
@@ -534,5 +517,5 @@ def test_a_finished_self_learn_card_does_not_reopen(page):
 
     tasks.click_task_card(0, SELF_LEARN_GROUP)
 
-    expect(page.locator("[data-rht-toaster]")).to_contain_text(ALREADY_DONE_TOAST)
+    expect(tasks.get_toast()).to_contain_text(ALREADY_DONE_TOAST)
     expect(page).to_have_url(DailyTasksPage.URL)

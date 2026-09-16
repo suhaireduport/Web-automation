@@ -334,6 +334,13 @@ class ExamInstructionsPage:
     def is_start_enabled(self):
         return self.get_start_exam_button().is_enabled()
 
+    def fits_viewport_width(self):
+        """Nothing on the page is wider than the window, so it never scrolls
+        sideways."""
+        return self.page.evaluate(
+            "() => document.documentElement.scrollWidth <= window.innerWidth"
+        )
+
     # ---------- feedback ----------
 
     def get_toast(self):

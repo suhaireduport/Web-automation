@@ -71,6 +71,9 @@ class DailyTasksPage:
     def get_selected_date(self):
         return self.page.locator(".dt-date-selected")
 
+    def get_selected_day_number(self):
+        return self.get_selected_date().locator(".dt-day-num")
+
     def get_day_name(self, index):
         return self.get_date_cell(index).locator(".dt-day-name")
 
@@ -221,6 +224,16 @@ class DailyTasksPage:
     def get_watch_now_button(self, index):
         return self.get_live_card(index).locator(".dt-live-watch")
 
+    def get_live_card_titled(self, title):
+        return self.get_live_cards().filter(
+            has=self.page.locator(".dt-live-title", has_text=title)
+        ).first
+
+    def click_watch_now_on(self, title):
+        """Watch Now on the live card carrying that title. It joins the class,
+        so only a test that means to open the player should call it."""
+        self.get_live_card_titled(title).locator(".dt-live-watch").click()
+
     # ---------- add task ----------
 
     def get_fab(self):
@@ -258,3 +271,10 @@ class DailyTasksPage:
         renders on top visually but the overlay swallows the pointer event, so
         clicking the overlay is the path a real tap takes."""
         self.get_add_task_overlay().click(position={"x": 5, "y": 5})
+
+    # ---------- feedback ----------
+
+    def get_toast(self):
+        """react-hot-toast renders every message into this one container, which
+        is always in the DOM, so assert on its text rather than its presence."""
+        return self.page.locator("[data-rht-toaster]")

@@ -123,6 +123,9 @@ class ChapterPage:
     def get_lock_icons(self):
         return self.page.locator(".ch-item-lock")
 
+    def get_unlocked_chapter_lock_icon(self, index):
+        return self.get_unlocked_chapters().nth(index).locator(".ch-item-lock")
+
     def is_chapter_locked(self, index):
         classes = self.get_chapter(index).get_attribute("class") or ""
         return "ch-item-locked" in classes

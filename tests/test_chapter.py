@@ -142,7 +142,7 @@ def test_unlocked_chapters_have_no_lock_icon(chapter_page):
         pytest.skip("Every chapter is locked for this subject")
 
     for i in range(unlocked.count()):
-        expect(unlocked.nth(i).locator(".ch-item-lock")).to_have_count(0)
+        expect(chapter_page.get_unlocked_chapter_lock_icon(i)).to_have_count(0)
 
 
 def test_locked_and_unlocked_add_up(chapter_page):

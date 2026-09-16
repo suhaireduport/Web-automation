@@ -232,3 +232,157 @@ def test_resend_asks_for_a_fresh_code(page, otp_new_number):
     page.wait_for_timeout(1000)
     assert otp_new_number.resend_seconds_left() > 0
     expect(otp_new_number.get_resend_button()).to_have_count(0)
+
+
+# ---------------------------------------------------------------------------
+# 6. The screen is not reachable on its own
+# ---------------------------------------------------------------------------
+
+def test_the_otp_screen_cannot_be_opened_directly(page):
+    """The screen is handed the number it is verifying by the screen before it.
+    Opened on its own it has nothing to verify, so it goes back for one rather
+    than sitting there asking for a code it could not check."""
+    page.goto(OTP_URL, wait_until="domcontentloaded")
+
+    expect(page).to_have_url(LOGIN_URL)
+    expect(LoginPage(page).get_mobile_input()).to_be_visible()
+
+
+# ---------------------------------------------------------------------------
+# 7. Going back to fix the number
+# ---------------------------------------------------------------------------
+
+def test_the_number_badge_returns_to_login_with_the_number_kept(page):
+    """The number on the badge is a button, and it is the way back: a code sent
+    to the wrong number is fixed by tapping it, and the number comes back with
+    it so only the wrong digits have to be typed again."""
+    mobile = throwaway_number()
+    otp_page = start_otp(page, mobile)
+
+    otp_page.click_phone_badge()
+
+    expect(page).to_have_url(LOGIN_URL)
+    login = LoginPage(page)
+    login.wait_for_loaded()
+    assert login.get_mobile_value() == mobile
+    assert login.get_country_code() == "+91"
+    expect(login.get_send_otp_button()).to_be_enabled()
+
+
+# ---------------------------------------------------------------------------
+# 8. Pasting the code  (API + UI)
+# ---------------------------------------------------------------------------
+
+def test_a_pasted_code_fills_the_boxes_and_verifies(page):
+    """A code is not always typed. Pasted off the message it came in, it lands
+    across the four boxes and submits itself the same way a typed one does."""
+    otp_page = start_otp(page, throwaway_number())
+
+    with page.expect_response(VERIFY_API) as answer:
+        otp_page.paste_otp(OTP)
+    assert answer.value.status == 200
+
+    page.wait_for_url(NEW_USER_URL, timeout=30000)
+
+
+def test_a_pasted_code_keeps_only_the_four_digits_it_needs(page, otp_new_number):
+    """What is pasted is rarely only the code - it arrives with the words around
+    it - so everything that is not a digit is dropped and only the first four
+    are kept."""
+    otp_new_number.paste_otp("Your OTP is 1357 90")
+
+    assert otp_new_number.get_box_values() == ["1", "3", "5", "7"]
+
+
+# ---------------------------------------------------------------------------
+# 9. What a verified code leaves behind  (API + UI)
+# ---------------------------------------------------------------------------
+
+def test_a_verified_code_leaves_a_session_that_survives_a_reload(page):
+    """Verifying is what signs the browser in. The token the call answers with
+    is kept, along with the account it names, and the session it makes is a real
+    one: reloading stays where it was instead of being sent back to sign in."""
+    otp_page = start_otp(page, throwaway_number())
+
+    with page.expect_response(VERIFY_API) as answer:
+        otp_page.enter_otp(OTP)
+    body = answer.value.json()
+    assert answer.value.status == 200
+    page.wait_for_url(NEW_USER_URL, timeout=30000)
+
+    kept = page.evaluate(
+        """() => ({
+            token: localStorage.getItem('eduport_auth_token'),
+            phone: localStorage.getItem('phone_no'),
+        })"""
+    )
+    assert kept["token"] == body["token"]
+    assert kept["phone"] == body["phone"]
+
+    # The new-user form is behind the sign in, so still being on it after a
+    # reload is the session standing on its own rather than on the navigation
+    # that got here.
+    page.reload(wait_until="domcontentloaded")
+    expect(page).to_have_url(NEW_USER_URL)
+
+
+# ---------------------------------------------------------------------------
+# 10. What the boxes refuse
+# ---------------------------------------------------------------------------
+
+def test_the_boxes_ignore_anything_that_is_not_a_digit(page, otp_new_number):
+    """Letters and symbols do not go into the boxes at all: nothing is drawn,
+    the focus does not move on, and nothing is submitted."""
+    verified = []
+    page.on("response", lambda r: verified.append(r) if "otp/verify" in r.url else None)
+
+    otp_new_number.get_boxes().first.click()
+    otp_new_number.type_digit("a")
+    otp_new_number.type_digit("#")
+
+    assert otp_new_number.get_box_values() == ["", "", "", ""]
+    assert otp_new_number.focused_box_index() == 0
+
+    page.wait_for_timeout(1000)
+    assert verified == []
+    expect(page).to_have_url(OTP_URL)
+
+
+# ---------------------------------------------------------------------------
+# 11. One code, one attempt  (API)
+# ---------------------------------------------------------------------------
+
+def test_a_complete_code_is_verified_exactly_once(page, otp_new_number):
+    """The screen submits on the fourth digit rather than on a button, so the
+    guard against sending the same code twice is the only thing standing
+    between a full code and a pair of attempts. A second code, typed after the
+    first was turned down, is sent once more rather than not at all."""
+    attempts = []
+    page.on("request", lambda r: attempts.append(r) if "otp/verify" in r.url else None)
+
+    otp_new_number.enter_otp("1357")
+    expect(otp_new_number.get_invalid_otp_message()).to_be_visible()
+    page.wait_for_timeout(1500)
+    assert len(attempts) == 1, f"the code was sent {len(attempts)} times"
+
+    otp_new_number.get_boxes().first.wait_for()
+    otp_new_number.enter_otp("2468")
+    page.wait_for_timeout(1500)
+    assert len(attempts) == 2, f"the second code was sent {len(attempts) - 1} times"
+
+
+# ---------------------------------------------------------------------------
+# 12. Help
+#
+# The screen carries the same Help button as the login screen it came from, in
+# the same corner and drawn the same way - but nothing is wired to it, so it
+# does nothing at all. Someone stuck here without a code has no way to ask.
+#
+# Not marked xfail: this fails while the button does nothing, and passes once it
+# raises the contact sheet the way the login screen's Help does.
+# ---------------------------------------------------------------------------
+
+def test_help_on_the_otp_screen_opens_the_contact_sheet(otp_new_number):
+    otp_new_number.click_help()
+
+    expect(otp_new_number.get_contact_sheet()).to_be_visible()

@@ -35,6 +35,11 @@ class OtpPage:
         """Reads back the number the code was sent to, e.g. "+91 6350039849"."""
         return self.page.locator(".otp-phone-badge")
 
+    def click_phone_badge(self):
+        """The badge is a button: it goes back to the login screen so the
+        number can be corrected, carrying the number with it."""
+        self.get_phone_badge().click()
+
     # ---------- the code ----------
 
     def get_boxes(self):
@@ -59,6 +64,31 @@ class OtpPage:
     def type_digit(self, digit):
         self.page.keyboard.type(digit)
 
+    def get_inputs_row(self):
+        """The row of boxes. Paste is handled here rather than on a box, so a
+        code pasted anywhere in the row fills all four."""
+        return self.page.locator(".otp-inputs")
+
+    def paste_otp(self, text):
+        """Paste a code the way a person does off an SMS.
+
+        The clipboard is not driven through the browser's own paste - that
+        needs permissions the run does not have - so the paste event is raised
+        on the row with the text on it, which is what the screen listens for."""
+        self.get_boxes().first.wait_for()
+        self.get_inputs_row().evaluate(
+            """(row, text) => {
+                const data = new DataTransfer();
+                data.setData('text', text);
+                row.dispatchEvent(new ClipboardEvent('paste', {
+                    clipboardData: data,
+                    bubbles: true,
+                    cancelable: true,
+                }));
+            }""",
+            text,
+        )
+
     def press_backspace(self):
         self.page.keyboard.press("Backspace")
 
@@ -68,6 +98,18 @@ class OtpPage:
             "() => [...document.querySelectorAll('.otp-box')]"
             ".indexOf(document.activeElement)"
         )
+
+    # ---------- help ----------
+
+    def get_help_button(self):
+        """The same Help button the login screen carries, in the same corner."""
+        return self.page.locator(".dl-help-btn")
+
+    def click_help(self):
+        self.get_help_button().click()
+
+    def get_contact_sheet(self):
+        return self.page.locator(".cu-overlay")
 
     # ---------- status button ----------
 

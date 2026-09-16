@@ -113,6 +113,9 @@ class AddTopicsPage:
     def get_topic_title(self, chapter_index, topic_index):
         return self.get_topic(chapter_index, topic_index).locator(".atp-topic-title")
 
+    def get_first_practicable_topic_title(self):
+        return self.get_practicable_topics().first.locator(".atp-topic-title")
+
     def get_topic_count(self, chapter_index, topic_index):
         return self.get_topic(chapter_index, topic_index).locator(".atp-topic-count")
 
@@ -360,6 +363,10 @@ class PracticeQuestionPage:
     def get_question(self):
         return self.page.locator(".tq-question")
 
+    def get_question_images(self):
+        """A question can be a picture rather than words."""
+        return self.get_question().locator("img")
+
     def get_question_text(self):
         return normalise(self.get_question().inner_text())
 
@@ -371,6 +378,9 @@ class PracticeQuestionPage:
 
     def get_option(self, index):
         return self.get_options().nth(index)
+
+    def get_option_images(self, index):
+        return self.get_option(index).locator("img")
 
     def get_option_letters(self):
         return self.page.locator(".tq-opt-letter")
@@ -484,6 +494,9 @@ class PracticeQuestionPage:
 
     def get_explanation_button(self):
         return self.page.locator(".tq-btn-outline")
+
+    def get_explanation_body(self):
+        return self.page.locator(".tq-exp-body")
 
     # ---------- result ----------
 

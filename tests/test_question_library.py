@@ -106,7 +106,7 @@ def test_info_dialog_describes_each_area(info_dialog):
 
 
 def test_info_dialog_explains_what_the_library_holds(info_dialog):
-    description = info_dialog.get_info_card("Question Library").locator(".qlh-card-desc")
+    description = info_dialog.get_info_card_description("Question Library")
 
     expect(description).to_contain_text("questions")
     expect(description).to_contain_text("previously attempted")

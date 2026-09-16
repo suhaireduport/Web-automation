@@ -160,3 +160,95 @@ class SignupPage:
 
     def skip(self):
         self.get_skip_button().click()
+
+    # ---------- step 4: the summary ----------
+    #
+    # Saving the avatar - through Set Profile or Skip - does not leave the
+    # wizard. It creates the account through profile/update and moves on to a
+    # summary of it: the name, the avatar, the month it was joined and the
+    # course, with the course still open to being changed. Start learning is
+    # what leaves, and it hands over to the personalising screen rather than
+    # going straight to home.
+
+    def get_summary(self):
+        return self.page.locator(".nu-summary")
+
+    def wait_for_summary(self, timeout=30000):
+        self.get_start_learning_button().wait_for(timeout=timeout)
+
+    def get_summary_name(self):
+        return self.page.locator(".nu-hero-name")
+
+    def get_summary_joined(self):
+        return self.page.locator(".nu-hero-joined")
+
+    def get_summary_avatar(self):
+        return self.page.locator(".nu-hero-avatar img")
+
+    def get_summary_course_label(self):
+        return self.page.locator(".nu-info-label")
+
+    def get_summary_course(self):
+        return self.page.locator(".nu-info-value")
+
+    def get_edit_course_button(self):
+        return self.page.locator(".nu-info-edit")
+
+    def get_start_learning_button(self):
+        return self.page.locator(".nu-cta-bar button")
+
+    def start_learning(self):
+        self.get_start_learning_button().click()
+
+
+class PersonalisingPage:
+    """The screen the wizard hands over to, at /onboarding-adaptive.
+
+    It carries no controls and asks for nothing. It says what it is doing while
+    the app settles and then replaces itself with home about two seconds later;
+    the replace is what keeps Back from returning to it.
+
+    It is on screen too briefly to be read a locator at a time, so read() takes
+    everything it shows in one hop.
+    """
+
+    URL = "https://eduport-react.pages.dev/onboarding-adaptive"
+
+    TEXT = "Personalising your learning experience..."
+
+    def __init__(self, page):
+        self.page = page
+
+    def get_page(self):
+        return self.page.locator(".nu-personalising")
+
+    def get_text(self):
+        return self.page.locator(".nu-personalising-text")
+
+    def get_icon(self):
+        return self.page.locator(".nu-personalising-icon")
+
+    def get_bar(self):
+        return self.page.locator(".nu-personalising-bar")
+
+    def get_fill(self):
+        return self.page.locator(".nu-personalising-fill")
+
+    def read(self):
+        """What the screen is showing, taken in one hop.
+
+        The screen lasts about two seconds, so a reading taken one element at a
+        time can end up being taken after it has gone."""
+        return self.page.evaluate(
+            """() => {
+                const text = document.querySelector('.nu-personalising-text');
+                return {
+                    path: location.pathname,
+                    page: !!document.querySelector('.nu-personalising'),
+                    text: text ? text.textContent.replace(/\\s+/g, ' ').trim() : null,
+                    icon: !!document.querySelector('.nu-personalising-icon'),
+                    bar: !!document.querySelector('.nu-personalising-bar'),
+                    fill: !!document.querySelector('.nu-personalising-fill'),
+                };
+            }"""
+        )

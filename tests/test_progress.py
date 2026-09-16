@@ -961,8 +961,8 @@ def test_a_topic_carries_no_progress_of_its_own(page, topic_page):
 
     index = part_way[0]
 
-    expect(topic_page.get_topic_header(index).locator(".tp-progress-bar")).to_have_count(0)
-    expect(topic_page.get_topic_header(index).locator(".tp-progress-ring-wrap")).to_have_count(0)
+    expect(topic_page.get_topic_header_progress_bar(index)).to_have_count(0)
+    expect(topic_page.get_topic_header_progress_ring(index)).to_have_count(0)
     assert topic_page.is_topic_complete(index) is False
 
 
@@ -1163,8 +1163,8 @@ def test_the_subject_card_on_home_carries_no_progress(page, home_page, working_c
     that a figure appearing on the card is noticed rather than assumed."""
     card = home_page.get_subjects().nth(working_content["subject"])
 
-    expect(card.locator(".ch-item-progress-bar")).to_have_count(0)
-    expect(card.locator(".tp-progress-ring-wrap")).to_have_count(0)
+    expect(home_page.get_subject_progress_bar(working_content["subject"])).to_have_count(0)
+    expect(home_page.get_subject_progress_ring(working_content["subject"])).to_have_count(0)
     assert not re.search(r"\d+%|\d+/\d+", card.inner_text())
 
 
