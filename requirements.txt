@@ -1,0 +1,6 @@
+pytest
+playwright
+
+# Allure reporting. Run with --alluredir=allure-results, then `allure serve
+# allure-results` (the Allure CLI is a separate Java tool, not a pip package).
+allure-pytest
