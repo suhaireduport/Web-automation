@@ -22,7 +22,13 @@ from pages.mistake_book_page import (
     MistakeQuestionsPage,
     MistakeQuestionPage,
 )
-from pages.practice_page import start_quick_practice
+from pages.practice_page import (
+    QUESTION_APIS,
+    WRONG,
+    answer_key,
+    choose_typed_answer,
+    start_quick_practice,
+)
 from pages.question_library_page import QuestionLibraryPage
 from pages.question_library_section_page import (
     normalise,
@@ -86,30 +92,57 @@ def mistaken(login_session, _mistake_state):
     page = login_session(SECOND_STUDENT_MOBILE)
     before = read_section_count(page.context, SECTION_CARD)
 
+    # A typed question has no options to cycle through, so its answer is taken
+    # from the payload the set was served in and a wrong one typed on purpose.
+    served = []
+
+    def collect(response):
+        if any(api in response.url for api in QUESTION_APIS):
+            served.append(response.json())
+
     for attempt in range(ATTEMPTS):
         page.goto(HOME_URL, wait_until="domcontentloaded")
-        practice, practised = start_quick_practice(page)
+        served.clear()
+        page.on("response", collect)
+        try:
+            practice, practised = start_quick_practice(page)
+        finally:
+            page.remove_listener("response", collect)
         if practice is None:
             _mistake_state["reason"] = NO_QUESTIONS
             pytest.skip(NO_QUESTIONS)
+
+        key = {}
+        for payload in served:
+            key.update(answer_key(payload))
 
         total = practice.question_total()
         wrong = []
         for index in range(total):
             question = practice.get_question_text()
             options = practice.get_option_text_values()
-            choice = index % practice.get_options().count()
+            typed = practice.is_numeric_question()
 
-            practice.select_option(choice)
+            if typed:
+                given = choose_typed_answer(practice, key, WRONG)
+                assert given is not None, (
+                    "the practice asked a typed question that was not in the "
+                    "payload it was served in"
+                )
+                practice.type_answer(given)
+                answered = practice.get_numeric_input()
+            else:
+                choice = index % practice.get_options().count()
+                practice.select_option(choice)
+                answered = practice.get_option(choice)
             practice.submit()
             if practice.answered_wrong():
                 wrong.append(
                     {
                         "question": question,
                         "options": options,
-                        "marked_option_class": practice.get_option(
-                            choice
-                        ).get_attribute("class"),
+                        "typed": typed,
+                        "marked_answer_class": answered.get_attribute("class"),
                         "palette_dot_class": practice.get_strip_dot_class(index),
                     }
                 )
@@ -199,7 +232,10 @@ def mistaken_question(page, mistaken, mistake_questions):
 # ---------------------------------------------------------------------------
 
 def test_the_practice_marked_the_answer_wrong(mistaken):
-    assert "tq-opt-wrong" in mistaken["marked_option_class"]
+    """On the option that was picked, or on the box the answer was typed in."""
+    marking = "tq-input-wrong" if mistaken["typed"] else "tq-opt-wrong"
+
+    assert marking in mistaken["marked_answer_class"]
 
 
 def test_the_practice_marked_the_question_wrong_in_the_palette(mistaken):
@@ -228,8 +264,12 @@ def test_the_wrongly_answered_question_reaches_the_mistake_book(
 def test_the_mistake_is_filed_under_the_subject_it_was_practised_in(
     mistaken, mistaken_subject
 ):
-    expect(mistaken_subject.get_tab(mistaken["subject"])).to_have_count(1)
+    """Under the subject's tab, and in the chapter it came from there. A
+    student moved between courses has a tab of that name per course, and the
+    one open is the current course's."""
     expect(mistaken_subject.get_active_tab()).to_contain_text(mistaken["subject"])
+
+    assert mistaken_subject.find_chapter(mistaken["chapter"]) is not None
 
 
 def test_the_mistake_is_filed_under_the_chapter_it_was_practised_in(
@@ -469,11 +509,18 @@ def test_view_solution_waits_for_an_answer(mistaken_question):
 
 
 def test_answering_the_question_enables_view_solution(mistaken_question):
-    mistaken_question.select_option(0)
+    """Choosing an option answers a question that has them; typing anything
+    into the box answers one that has a box."""
+    if mistaken_question.is_numeric_question():
+        mistaken_question.get_numeric_input().fill("1")
 
-    expect(mistaken_question.get_option(0)).to_have_class(
-        re.compile("qlr-opt-selected")
-    )
+        expect(mistaken_question.get_numeric_input()).to_have_value("1")
+    else:
+        mistaken_question.select_option(0)
+
+        expect(mistaken_question.get_option(0)).to_have_class(
+            re.compile("qlr-opt-selected")
+        )
     expect(mistaken_question.get_view_solution_button()).to_be_enabled()
 
     assert mistaken_question.is_solution_available()

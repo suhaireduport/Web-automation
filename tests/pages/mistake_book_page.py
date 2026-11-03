@@ -11,6 +11,7 @@ class MistakeBookPage(SectionPage):
     were answered wrong, reached from the Question Library card."""
 
     URL = f"{BASE_URL}/home/questionLibrary/contents/mistakebook"
+    PROGRESS_TYPE = "mistaken"
 
     def has_mistakes(self):
         return self.has_questions()

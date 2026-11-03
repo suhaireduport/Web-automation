@@ -43,10 +43,13 @@ from pages.practice_page import (
     PracticeConfigPage,
     PracticeQuestionPage,
     answer_key,
-    choose_option,
+    answer_question,
     open_practice_from_home,
+    right_answers,
     signature,
     CORRECT,
+    DONT_KNOW,
+    TYPED_INPUTS,
     WRONG,
 )
 
@@ -143,18 +146,23 @@ def key_from(served):
 
 
 def answer(practice, served, how):
-    """Answer the question on screen the way asked for, and wait for marking."""
+    """Answer the question on screen the way asked for, and wait for marking.
+
+    Hands back what was given: the option picked, the number typed, or None.
+    Passing on a question needs no answer key, so served may be None then."""
     if how is None:
-        practice.get_dont_know_button().click()
-    else:
-        choice = choose_option(practice, key_from(served), how)
-        assert choice is not None, (
-            "the set asked a question that was not in the payload it was "
-            "served in, so there is no way to answer it on purpose"
-        )
-        practice.select_option(choice)
-        practice.get_primary_button().click()
-    practice.get_correct_options().first.wait_for()
+        return answer_question(practice, {}, DONT_KNOW)
+    return answer_question(practice, key_from(served), how)
+
+
+def first_question(served):
+    """The question a set opens on, as it was served."""
+    return served[0]["questions"][0]
+
+
+def is_typed(question):
+    """Whether a question is answered by typing rather than by choosing."""
+    return question["input_type"] in TYPED_INPUTS
 
 
 # ---------------------------------------------------------------------------
@@ -244,12 +252,12 @@ def test_the_rules_screen_publishes_the_scoring(rules_screen):
 # The question screen
 # ---------------------------------------------------------------------------
 
-def test_the_question_screen_shows_the_question_and_its_options(question_screen):
-    practice, _, _ = question_screen
+def test_the_question_screen_shows_the_question_and_how_to_answer_it(question_screen):
+    """A question is answered by choosing among options or by typing a number,
+    whichever it was served as, and the screen offers that and only that."""
+    practice, _, served = question_screen
 
     expect(practice.get_question()).to_be_visible()
-    expect(practice.get_choose_label()).to_be_visible()
-    expect(practice.get_options().first).to_be_visible()
     expect(practice.get_primary_button()).to_have_text("Submit")
 
     # A question, and an option under it, can be a picture rather than words,
@@ -257,6 +265,18 @@ def test_the_question_screen_shows_the_question_and_its_options(question_screen)
     assert practice.get_question_text() != "" or practice.get_question_images().count(), (
         "the question is neither text nor a picture"
     )
+
+    if is_typed(first_question(served)):
+        expect(practice.get_type_answer_label()).to_have_text("Type answer")
+        expect(practice.get_numeric_input()).to_be_editable()
+        expect(practice.get_numeric_input()).to_have_value("")
+        expect(practice.get_choose_label()).to_have_count(0)
+        expect(practice.get_options()).to_have_count(0)
+        return
+
+    expect(practice.get_choose_label()).to_be_visible()
+    expect(practice.get_options().first).to_be_visible()
+    expect(practice.get_numeric_input()).to_have_count(0)
 
     assert practice.get_options().count() >= 2
     assert practice.get_option_letters().count() == practice.get_options().count()
@@ -292,8 +312,18 @@ def test_the_progress_strip_carries_one_dot_per_question(question_screen):
 # Answering
 # ---------------------------------------------------------------------------
 
-def test_choosing_an_option_marks_it_selected(question_screen):
-    practice, _, _ = question_screen
+def test_an_answer_is_held_until_it_is_submitted(question_screen):
+    """A chosen option is the only one picked out; a typed answer stays in its
+    box, which takes digits and turns letters away."""
+    practice, _, served = question_screen
+
+    if is_typed(first_question(served)):
+        practice.get_numeric_input().press_sequentially("12a")
+
+        expect(practice.get_numeric_input()).to_have_value("12")
+        expect(practice.get_numeric_mark()).to_have_count(0)
+        expect(practice.get_primary_button()).to_have_text("Submit")
+        return
 
     practice.select_option(0)
 
@@ -306,8 +336,16 @@ def test_a_correct_answer_is_marked_correct(question_screen):
     practice, _, served = question_screen
     answer(practice, served, CORRECT)
 
-    expect(practice.get_correct_options()).to_have_count(1)
-    expect(practice.get_wrong_options()).to_have_count(0)
+    if is_typed(first_question(served)):
+        expect(practice.get_numeric_marked_correct()).to_have_count(1)
+        expect(practice.get_numeric_marked_wrong()).to_have_count(0)
+        expect(practice.get_numeric_mark()).to_be_visible()
+        expect(practice.get_numeric_input()).to_be_disabled()
+        # Nothing to put right, so the right answer is not spelled out.
+        expect(practice.get_correct_answer_box()).to_have_count(0)
+    else:
+        expect(practice.get_correct_options()).to_have_count(1)
+        expect(practice.get_wrong_options()).to_have_count(0)
     expect(practice.get_primary_button()).to_have_text("Next")
 
     assert practice.answered_wrong() is False
@@ -317,19 +355,36 @@ def test_a_wrong_answer_marks_the_choice_and_reveals_the_right_one(question_scre
     practice, _, served = question_screen
     answer(practice, served, WRONG)
 
-    expect(practice.get_wrong_options()).to_have_count(1)
-    expect(practice.get_correct_options()).to_have_count(1)
+    question = first_question(served)
+    if is_typed(question):
+        expect(practice.get_numeric_marked_wrong()).to_have_count(1)
+        expect(practice.get_numeric_marked_correct()).to_have_count(0)
+        expect(practice.get_numeric_mark()).to_be_visible()
+        expect(practice.get_correct_answer_label()).to_have_text("The correct answer is :")
+        expect(practice.get_correct_answer_box()).to_have_text(
+            str(question["right_answers"])
+        )
+    else:
+        expect(practice.get_wrong_options()).to_have_count(1)
+        expect(practice.get_correct_options()).to_have_count(1)
     expect(practice.get_primary_button()).to_have_text("Next")
 
     assert practice.answered_wrong() is True
 
 
 def test_i_dont_know_reveals_the_answer_without_marking_one_wrong(question_screen):
-    practice, _, _ = question_screen
+    practice, _, served = question_screen
     answer(practice, None, None)
 
-    expect(practice.get_correct_options()).to_have_count(1)
-    expect(practice.get_wrong_options()).to_have_count(0)
+    question = first_question(served)
+    if is_typed(question):
+        expect(practice.get_correct_answer_box()).to_have_text(
+            str(question["right_answers"])
+        )
+        expect(practice.get_numeric_marked_wrong()).to_have_count(0)
+    else:
+        expect(practice.get_correct_options()).to_have_count(1)
+        expect(practice.get_wrong_options()).to_have_count(0)
     expect(practice.get_primary_button()).to_have_text("Next")
 
     assert practice.answered_wrong() is False
@@ -350,6 +405,14 @@ def test_the_explanation_opens_once_the_question_is_answered(question_screen):
     practice.get_explanation_button().click()
 
     expect(practice.get_explanation_body()).to_be_visible()
+
+    # A typed question has no option to pick out, so the explanation spells
+    # its answer out instead.
+    question = first_question(served)
+    if is_typed(question):
+        expect(practice.get_correct_answer_box()).to_have_text(
+            str(question["right_answers"])
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +488,7 @@ def test_reloading_a_practice_returns_to_its_rules_screen(question_screen):
 
     expect(practice.get_take_test_button()).to_be_visible()
     expect(practice.get_title()).to_have_text(practised["topic"])
-    expect(practice.get_options()).to_have_count(0)
+    expect(practice.get_answer_controls()).to_have_count(0)
 
     assert practice.page.url == url
 
@@ -468,14 +531,32 @@ def test_the_question_on_screen_matches_the_quiz_api(question_screen):
         signature(option["value"]) for option in first["options"]
     ]
 
+    # A typed question is served as one, and its box takes the kind of number
+    # it was served for: a whole one, or a decimal.
+    if is_typed(first):
+        expect(practice.get_numeric_input()).to_have_attribute(
+            "inputmode", TYPED_INPUTS[first["input_type"]]
+        )
+    else:
+        expect(practice.get_numeric_input()).to_have_count(0)
+
     shown = signature(practice.get_question().inner_html())
     assert shown == signature(first["question_description"])
 
 
 def test_the_marking_follows_the_right_answer_the_api_served(question_screen):
-    """The option the payload names as right is the one the screen marks."""
+    """The answer the payload names as right is the one the screen marks."""
     practice, _, served = question_screen
-    first = served[0]["questions"][0]
+    first = first_question(served)
+
+    if is_typed(first):
+        typed = answer(practice, served, CORRECT)
+
+        assert typed in right_answers(first)
+        expect(practice.get_numeric_input()).to_have_value(typed)
+        expect(practice.get_numeric_marked_correct()).to_have_count(1)
+        return
+
     right = [int(n) - 1 for n in re.findall(r"\d+", str(first["right_answers"]))]
 
     answer(practice, served, CORRECT)
@@ -499,17 +580,21 @@ def test_the_answer_is_sent_to_the_submit_api(question_screen):
     rather than a tally; the tally comes with the last one, and what it pays
     is checked in test_daily_task_coins.py."""
     practice, _, served = question_screen
-    first = served[0]["questions"][0]
+    first = first_question(served)
     right = re.findall(r"\d+", str(first["right_answers"]))
 
     with practice.page.expect_response(lambda r: SUBMIT_API in r.url) as sent:
-        answer(practice, served, CORRECT)
+        given = answer(practice, served, CORRECT)
 
     assert sent.value.status == 200
 
     posted = sent.value.request.post_data_json
     assert posted["question_id"] == first["id"]
-    assert re.findall(r"\d+", str(posted["answer"])) == right
+    if is_typed(first):
+        # A typed answer is posted as it was typed.
+        assert posted["answer"] == given
+    else:
+        assert re.findall(r"\d+", str(posted["answer"])) == right
     assert posted["task_id"] == int(re.search(r"/(\d+)\?", practice.page.url).group(1))
     assert posted["completed"] is (practice.question_total() == 1)
     assert sent.value.json()

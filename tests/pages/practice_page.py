@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal, InvalidOperation
 from html import unescape
 
 from playwright.sync_api import Error as PlaywrightError
@@ -337,7 +338,9 @@ class PracticeQuestionPage:
     # ---------- question ----------
 
     def wait_for_question(self, timeout=30000):
-        self.get_options().first.wait_for(timeout=timeout)
+        """A question is up once it offers a way of answering it - options for
+        one kind, a box to type into for the other."""
+        self.get_answer_controls().first.wait_for(timeout=timeout)
 
     def wait_for_next_question(self, timeout=30000):
         """The next question is up once its answer is asked for again: the
@@ -417,11 +420,57 @@ class PracticeQuestionPage:
             f"options => options.map({self.OPTION_SOURCE})"
         )
 
+    def get_question_source(self):
+        """The question on screen, read back the same way as an option is."""
+        return self.get_question().evaluate(self.OPTION_SOURCE)
+
     def select_option(self, index):
         self.get_option(index).click()
 
     def is_option_selected(self, index):
         return "tq-opt-selected" in (self.get_option(index).get_attribute("class") or "")
+
+    # ---------- typed answers ----------
+    #
+    # A question with no options is answered by typing a number into a box
+    # instead, and either kind can turn up in any set. The box only takes what
+    # its input_type allows - a whole number, or a decimal to two places - and
+    # the answer is right when it reads the same as one of right_answers.
+
+    def get_answer_controls(self):
+        """Whatever the question on screen offers as a way of answering it:
+        options to choose from, or a box to type into."""
+        return self.page.locator(".tq-option, .tq-numeric-input input")
+
+    def get_type_answer_label(self):
+        return self.page.locator(".tq-type-answer")
+
+    def get_numeric_input(self):
+        return self.page.locator(".tq-numeric-input input")
+
+    def is_numeric_question(self):
+        return self.get_numeric_input().count() > 0
+
+    def type_answer(self, value):
+        self.get_numeric_input().fill(str(value))
+
+    def get_numeric_marked_correct(self):
+        return self.page.locator(".tq-numeric-input input.tq-input-correct")
+
+    def get_numeric_marked_wrong(self):
+        return self.page.locator(".tq-numeric-input input.tq-input-wrong")
+
+    def get_numeric_mark(self):
+        """The tick or cross drawn beside the box once it has been marked."""
+        return self.page.locator(".tq-numeric-mark")
+
+    def get_correct_answer_label(self):
+        return self.page.locator(".tq-correct-answer-label")
+
+    def get_correct_answer_box(self):
+        """The right answer to a typed question, shown once it is out of reach:
+        under a box marked wrong, and in the explanation."""
+        return self.page.locator(".tq-correct-answer-box")
 
     # ---------- palette ----------
 
@@ -476,7 +525,24 @@ class PracticeQuestionPage:
     def submit(self):
         """Answer the question and wait for the marking to come back."""
         self.get_primary_button().click()
-        self.page.locator(".tq-opt-correct").first.wait_for()
+        self.wait_for_marking()
+
+    def give_an_answer(self):
+        """Answer the question on screen without minding whether it is right:
+        the first option, or a 0 typed into the box."""
+        if self.is_numeric_question():
+            self.type_answer(0)
+        else:
+            self.select_option(0)
+        self.submit()
+
+    def get_marking(self):
+        """What a question is drawn with once it has been marked: the right
+        option picked out, or the tick or cross beside a typed answer."""
+        return self.page.locator(".tq-opt-correct, .tq-numeric-mark")
+
+    def wait_for_marking(self):
+        self.get_marking().first.wait_for()
 
     def next_question(self):
         self.get_primary_button().click()
@@ -489,8 +555,11 @@ class PracticeQuestionPage:
 
     def answered_wrong(self):
         """The answer given was marked wrong, not merely a wrong option shown:
-        only the option that was picked is given the wrong marking."""
-        return self.get_wrong_options().count() > 0
+        only the option that was picked is given the wrong marking, and a
+        typed answer is marked on the box it was typed into."""
+        return (
+            self.get_wrong_options().count() + self.get_numeric_marked_wrong().count()
+        ) > 0
 
     def get_explanation_button(self):
         return self.page.locator(".tq-btn-outline")
@@ -727,6 +796,11 @@ CORRECT = "correct"
 WRONG = "wrong"
 DONT_KNOW = "idk"
 
+# How a question asks to be answered, by its input_type: 1 is options, and the
+# typed ones are named by the inputmode their box is drawn with.
+OPTIONS_INPUT = 1
+TYPED_INPUTS = {2: "numeric", 3: "decimal"}
+
 # A wrong answer can bring on a retry, so the number of questions a set ends up
 # asking is not the number it was started with. This only bounds the loop.
 MAX_QUESTIONS = 30
@@ -745,18 +819,36 @@ def signature(text):
     return re.sub(r"[^0-9A-Za-z\-+=<>^_]", "", text)
 
 
+def right_answers(question):
+    """The answers a typed question accepts, as the screen compares them: the
+    served right_answers split on commas."""
+    return [
+        answer.strip()
+        for answer in str(question.get("right_answers", "")).split(",")
+        if answer.strip()
+    ]
+
+
 def answer_key(payload):
-    """{the options of a question: which of them are right}, by position.
+    """{the options of a question: which of them are right}, by position, and
+    {a typed question: the answers it accepts}.
 
     Keyed on the options rather than on the question, because the options are
     what can be read back off the screen, and they tell the two halves of an
-    adaptive pair apart just as well."""
+    adaptive pair apart just as well. A typed question has no options to key
+    on, so it is keyed on its own text instead - a string, where an options
+    key is a tuple, so the two never meet."""
     key = {}
 
     def add(question):
-        options = tuple(signature(option["value"]) for option in question["options"])
-        right = str(question.get("right_answers", ""))
-        key[options] = [int(n) - 1 for n in re.findall(r"\d+", right)]
+        if question.get("options"):
+            options = tuple(
+                signature(option["value"]) for option in question["options"]
+            )
+            right = str(question.get("right_answers", ""))
+            key[options] = [int(n) - 1 for n in re.findall(r"\d+", right)]
+        else:
+            key[signature(question["question_description"])] = right_answers(question)
         for alternative in question.get("alternatives") or []:
             add(alternative)
 
@@ -777,6 +869,51 @@ def choose_option(practice, key, how):
     if how == CORRECT:
         return right[0]
     return next(index for index in range(len(options)) if index not in right)
+
+
+def choose_typed_answer(practice, key, how):
+    """What to type for the question on screen, or None when the key does not
+    carry it.
+
+    A wrong answer is a whole number one past the right one, which both kinds
+    of box will take whether the right answer is whole or not."""
+    right = key.get(signature(practice.get_question_source()))
+    if not right:
+        return None
+    if how == CORRECT:
+        return right[0]
+    try:
+        wrong = int(Decimal(right[0]).to_integral_value()) + 1
+    except InvalidOperation:
+        wrong = 0
+    while str(wrong) in right:
+        wrong += 1
+    return str(wrong)
+
+
+def answer_question(practice, key, how):
+    """Answer the question on screen `how`, by whatever it asks for - an option
+    or a typed number - and wait for the marking.
+
+    Hands back what was given: the index of the option picked, the text typed,
+    or None for I don't know."""
+    if how == DONT_KNOW:
+        practice.get_dont_know_button().click()
+        practice.wait_for_marking()
+        return None
+
+    typed = practice.is_numeric_question()
+    given = (choose_typed_answer if typed else choose_option)(practice, key, how)
+    assert given is not None, (
+        "the quiz asked a question that was not in the payload it was served "
+        "in, so there is no way to answer it on purpose"
+    )
+    if typed:
+        practice.type_answer(given)
+    else:
+        practice.select_option(given)
+    practice.submit()
+    return given
 
 
 def take_practice_quiz(page, how=CORRECT, questions=1, attempts=2, mode=None):
@@ -844,17 +981,7 @@ def _drive_practice_quiz(page, how, questions, mode=None):
             practice.wait_for_question()
             asked += 1
 
-            if how == DONT_KNOW:
-                practice.get_dont_know_button().click()
-                practice.get_correct_options().first.wait_for()
-            else:
-                choice = choose_option(practice, key, how)
-                assert choice is not None, (
-                    "the quiz asked a question that was not in the payload it "
-                    "was served in, so there is no way to answer it on purpose"
-                )
-                practice.select_option(choice)
-                practice.submit()
+            answer_question(practice, key, how)
 
             practice.next_question()
             try:

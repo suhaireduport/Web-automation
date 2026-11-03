@@ -369,15 +369,6 @@ class TopicQuizPage(PracticeQuestionPage):
         """The note under the scoring, which says how the quiz behaves."""
         return self.page.locator(".tq-info-box")
 
-    def take_test(self):
-        """Start the quiz and wait for its first question.
-
-        Overrides the practice screen's own, which waits for options: a topic
-        quiz can open on a question answered by typing, and that one has
-        none."""
-        self.get_take_test_button().click()
-        self.get_answer_controls().first.wait_for(timeout=30000)
-
     # ---------- the rules sheet ----------
 
     def get_help_button(self):
@@ -419,11 +410,3 @@ class TopicQuizPage(PracticeQuestionPage):
 
     def get_choose_count(self):
         return self.page.locator(".tq-choose-num")
-
-    def get_numeric_input(self):
-        return self.page.locator(".tq-numeric-input input")
-
-    def get_answer_controls(self):
-        """Whatever the question on screen offers as a way of answering it:
-        options to choose from, or a box to type into."""
-        return self.page.locator(".tq-option, .tq-numeric-input input")

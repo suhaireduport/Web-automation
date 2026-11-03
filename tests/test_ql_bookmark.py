@@ -123,9 +123,8 @@ def bookmarked(login_session, _bookmark_state):
     # left unanswered comes back in the next run already bookmarked, where a
     # second bookmark of it would move no count at all. The rest of the set is
     # left alone so the account keeps them.
-    practice.select_option(0)
     with page.expect_response(SUBMIT_API, timeout=REMOVE_TIMEOUT):
-        practice.submit()
+        practice.give_an_answer()
     practice.get_back_button().click()
 
     yield _bookmark_state
@@ -167,9 +166,8 @@ def own_bookmark(page):
     # Answer it before leaving, and wait for the answer to be saved. A question
     # left unattempted is served again to the next test, which would then be
     # working on the same bookmark as this one.
-    practice.select_option(0)
     with page.expect_response(SUBMIT_API, timeout=REMOVE_TIMEOUT):
-        practice.submit()
+        practice.give_an_answer()
     practice.get_back_button().click()
 
     return dict(practised, question=question)
@@ -292,8 +290,12 @@ def test_the_bookmarked_question_is_listed_in_the_section(bookmarked, bookmark_q
 def test_the_bookmark_is_filed_under_the_subject_it_was_practised_in(
     bookmarked, bookmarked_subject
 ):
-    expect(bookmarked_subject.get_tab(bookmarked["subject"])).to_have_count(1)
+    """Under the subject's tab, and in the chapter it came from there. A
+    student moved between courses has a tab of that name per course, and the
+    one open is the current course's."""
     expect(bookmarked_subject.get_active_tab()).to_contain_text(bookmarked["subject"])
+
+    assert bookmarked_subject.find_chapter(bookmarked["chapter"]) is not None
 
 
 def test_the_bookmark_is_filed_under_the_chapter_it_was_practised_in(

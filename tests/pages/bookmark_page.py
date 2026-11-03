@@ -15,6 +15,7 @@ class BookmarkPage(SectionPage):
     """
 
     URL = f"{BASE_URL}/home/questionLibrary/contents/bookmark"
+    PROGRESS_TYPE = "bookmarked"
 
     def has_bookmarks(self):
         return self.has_questions()

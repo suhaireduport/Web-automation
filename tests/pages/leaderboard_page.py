@@ -1,8 +1,16 @@
 import re
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 # How many places the podium takes off the top of a board before the list
 # starts. A board with this many students or fewer is drawn as a plain list.
 PODIUM_PLACES = 3
+
+
+def podium_name(student):
+    """What a podium tile prints for a student: the name up to its first
+    space, where the list prints the whole of it."""
+    return student.strip().split(" ")[0]
 
 
 class LeaderboardPage:
@@ -232,7 +240,8 @@ class LeaderboardPage:
     def get_row_delta(self, index):
         """Which way the row has moved since the list was last worked out:
         "up", "down" or "equal". A tab that publishes no movement has no
-        marker at all, which reads back as None."""
+        marker at all, which reads back as None - and neither does a podium
+        tile, which is not drawn with one."""
         row = self.get_row(index)
         if row.locator(".lb-delta-up, .lb-delta-text-up").count():
             return "up"
@@ -347,6 +356,30 @@ class LeaderboardPage:
 
     def get_log_tiles(self):
         return self.page.locator(".mls-tile")
+
+    def get_log_body(self):
+        """The part of the sheet that scrolls, and whose scrolling asks for
+        more of the log."""
+        return self.page.locator(".mls-body")
+
+    def load_log(self, count, timeout=15000):
+        """Scroll the sheet until it holds `count` entries, or stops growing.
+
+        The sheet is handed the log a page at a time, 30 entries to a page,
+        and only asks for the next page once it is scrolled to near its
+        bottom. Stops short rather than failing when no more arrive, so the
+        caller's count is what reports the shortfall."""
+        while self.get_log_tiles().count() < count:
+            shown = self.get_log_tiles().count()
+            self.get_log_body().evaluate("body => body.scrollTop = body.scrollHeight")
+            try:
+                self.page.wait_for_function(
+                    "shown => document.querySelectorAll('.mls-tile').length > shown",
+                    arg=shown,
+                    timeout=timeout,
+                )
+            except PlaywrightTimeoutError:
+                return
 
     def log_tile_count(self, timeout=10000):
         try:

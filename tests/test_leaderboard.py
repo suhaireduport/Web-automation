@@ -35,7 +35,13 @@ import pytest
 from playwright.sync_api import expect
 
 from conftest import STUDENT_MOBILE
-from pages.leaderboard_page import LeaderboardPage, call_api, read_balance, read_coin_log
+from pages.leaderboard_page import (
+    LeaderboardPage,
+    call_api,
+    podium_name,
+    read_balance,
+    read_coin_log,
+)
 
 
 TABS = list(LeaderboardPage.TABS)
@@ -88,6 +94,14 @@ def arrow_for(delta):
     return "equal"
 
 
+def shown_name(leaderboard, index, row):
+    """The name the board prints for a served row: a podium tile prints the
+    first name only, the list the whole one."""
+    if leaderboard.is_podium_place(index):
+        return podium_name(row["student"])
+    return row["student"].strip()
+
+
 # ---------------------------------------------------------------------------
 # 1. The tabs
 # ---------------------------------------------------------------------------
@@ -125,7 +139,9 @@ def test_the_rank_list_matches_the_leaderboard_api(page, leaderboard, tab):
     if not served:
         return
 
-    assert leaderboard.get_names() == [row["student"].strip() for row in served]
+    assert leaderboard.get_names() == [
+        shown_name(leaderboard, index, row) for index, row in enumerate(served)
+    ]
     assert leaderboard.get_coins() == [row["coins"] for row in served]
 
 
@@ -164,7 +180,9 @@ def test_the_signed_in_student_is_the_row_the_api_flags(page, leaderboard, tab):
     index = mine[0]
 
     assert leaderboard.current_row_index() == index
-    expect(leaderboard.get_row_name(index)).to_have_text(served[index]["student"].strip())
+    expect(leaderboard.get_row_name(index)).to_have_text(
+        shown_name(leaderboard, index, served[index])
+    )
     assert leaderboard.get_coins()[index] == served[index]["coins"]
     assert leaderboard.get_ranks()[index] == index + 1
 
@@ -172,18 +190,24 @@ def test_the_signed_in_student_is_the_row_the_api_flags(page, leaderboard, tab):
 @pytest.mark.parametrize("tab", TABS)
 def test_the_rank_arrow_follows_the_movement_the_api_reports(page, leaderboard, tab):
     """rank_delta is drawn as an arrow: up when the row has climbed, down when
-    it has slipped, and a flat marker when it has not moved."""
+    it has slipped, and a flat marker when it has not moved. The podium tiles
+    are drawn without one, so the top three carry no marker at all."""
     served = open_tab(page, leaderboard, tab)
     if not served:
         pytest.skip(f"{tab} has nobody on it")
 
     shown = [leaderboard.get_row_delta(index) for index in range(len(served))]
-    expected = [arrow_for(row["rank_delta"]) for row in served]
+    expected = [
+        None if leaderboard.is_podium_place(index) else arrow_for(row["rank_delta"])
+        for index, row in enumerate(served)
+    ]
 
     assert shown == expected, [row["rank_delta"] for row in served]
 
     for index, row in enumerate(served):
-        if row["rank_delta"]:
+        if leaderboard.is_podium_place(index):
+            expect(leaderboard.get_row_delta_text(index)).to_have_count(0)
+        elif row["rank_delta"]:
             expect(leaderboard.get_row_delta_text(index)).to_have_text(
                 f"{row['rank_delta']:+d}"
             )
@@ -233,6 +257,8 @@ def test_my_log_matches_the_coin_log_api(page, leaderboard, tab):
         expect(leaderboard.get_log_empty_title()).to_be_visible()
         return
 
+    # The sheet holds a page of the log until it is scrolled for the rest.
+    leaderboard.load_log(len(events))
     expect(leaderboard.get_log_tiles()).to_have_count(len(events))
     assert leaderboard.get_log_titles() == [
         event["data"]["title"].strip() for event in events

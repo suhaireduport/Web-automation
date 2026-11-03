@@ -183,7 +183,12 @@ def test_the_question_screen_carries_the_question_its_options_and_its_controls(p
     assert practice.get_question_text() != "" or practice.get_question_images().count(), (
         "the question is neither text nor a picture"
     )
-    assert practice.get_options().count() >= 2
+    # A typed question offers a box in place of the options.
+    if practice.is_numeric_question():
+        expect(practice.get_numeric_input()).to_be_editable()
+        expect(practice.get_options()).to_have_count(0)
+    else:
+        assert practice.get_options().count() >= 2
 
     expect(practice.get_back_button()).to_be_visible()
     expect(practice.get_bookmark_button()).to_be_visible()

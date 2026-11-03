@@ -1,5 +1,7 @@
 import re
 
+from pages.leaderboard_page import call_api
+
 BASE_URL = "https://eduport-react.pages.dev"
 
 
@@ -13,6 +15,10 @@ class SectionPage:
     """
 
     URL = f"{BASE_URL}/home/questionLibrary/contents"
+
+    # The type the section's progress call is asked for, which lists the
+    # subjects its tabs are drawn from.
+    PROGRESS_TYPE = None
 
     def __init__(self, page):
         self.page = page
@@ -77,9 +83,47 @@ class SectionPage:
     def click_tab(self, index):
         self.get_tabs().nth(index).click()
 
+    # One subject name can head more than one tab. What a section holds
+    # outlives a change of course, so a student moved to a new course still has
+    # the old course's subjects listed beside the new course's subjects of the
+    # same name - "Chemistry (2)" and "Chemistry (1)". The tabs are drawn in
+    # the order the section's progress call lists its subjects, so which tab
+    # is which is told by subject id there.
+
+    def get_tab_indexes(self, subject):
+        """Every tab carrying this subject's name, by position."""
+        self.get_tab(subject).first.wait_for()
+        return [
+            index
+            for index, name in enumerate(self.get_tab_names())
+            if name == subject.strip()
+        ]
+
+    def current_course_tab(self, subject):
+        """The position of the tab holding this subject as the course the
+        student is on now has it."""
+        current = [
+            listed["id"]
+            for listed in call_api(self.page, "/home")["subjects"]
+            if listed["title"].strip() == subject.strip()
+        ]
+        assert len(current) == 1, f"the current course has {len(current)} {subject!r}"
+        served = call_api(
+            self.page, f"/question-bank/progress?type={self.PROGRESS_TYPE}"
+        )["subjects"]
+        return [listed["id"] for listed in served].index(current[0])
+
+    def open_tab(self, index):
+        self.click_tab(index)
+        self.get_tabs().nth(index).and_(self.get_active_tab()).wait_for()
+        self.get_chapters().first.wait_for()
+
     def open_subject(self, subject):
-        self.get_tab(subject).click()
-        self.page.locator(".qlx-card").first.wait_for()
+        """Show a subject's tab - where the name heads more than one, the one
+        belonging to the course the student is on now, which is where anything
+        just practised is filed."""
+        tabs = self.get_tab_indexes(subject)
+        self.open_tab(tabs[0] if len(tabs) == 1 else self.current_course_tab(subject))
 
     def get_tab_count(self, index):
         """The number in brackets on a tab, which counts chapters, not
@@ -368,7 +412,9 @@ class SectionQuestionPage:
         return self.page.locator(".qlr-page")
 
     def wait_for_loaded(self):
-        self.get_options().first.wait_for()
+        """Loaded once the question offers a way of answering it: options, or
+        for a typed question a box."""
+        self.page.locator(".qlr-option, .qlr-numeric-input").first.wait_for()
 
     def get_close_button(self):
         return self.page.locator(".qlr-icon-btn[aria-label='Close']")
@@ -418,6 +464,12 @@ class SectionQuestionPage:
 
     def is_option_selected(self, index):
         return "qlr-opt-selected" in self.get_option(index).get_attribute("class")
+
+    def get_numeric_input(self):
+        return self.page.locator(".qlr-numeric-input")
+
+    def is_numeric_question(self):
+        return self.get_numeric_input().count() > 0
 
     # ---------- recent attempts ----------
 

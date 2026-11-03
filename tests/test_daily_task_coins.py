@@ -282,11 +282,10 @@ def test_starting_a_quiz_pays_nothing(page):
     if practice is None:
         pytest.skip(NOTHING_TO_PRACTISE)
 
-    expect(practice.get_options().first).to_be_visible()
+    expect(practice.get_answer_controls().first).to_be_visible()
     assert read_balance(page) == before, "starting a quiz moved the balance"
 
-    practice.select_option(0)
-    practice.submit()
+    practice.give_an_answer()
     assert read_balance(page) == before, "giving an answer moved the balance"
 
 

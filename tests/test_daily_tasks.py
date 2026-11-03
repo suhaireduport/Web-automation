@@ -1,3 +1,4 @@
+from datetime import date
 import re
 import pytest
 from playwright.sync_api import expect
@@ -229,10 +230,16 @@ def test_pending_date_badges_match_the_daily_tasks_api(page):
     daily_tasks, results = open_daily_tasks_with_payload(page)
 
     shown = {int(text) for text in daily_tasks.get_day_numbers().all_inner_texts()}
+    # The app badges only past days that were served tasks: today and later
+    # read as "none" even while their pending_status is set.
+    today = date.today().isoformat()
     pending = [
         entry
         for entry in results
-        if entry["pending_status"] and day_of(entry["date"]) in shown
+        if entry["pending_status"]
+        and entry["date"] < today
+        and any(entry[key] for key in TASK_KEYS)
+        and day_of(entry["date"]) in shown
     ]
 
     expect(daily_tasks.get_pending_date_badges()).to_have_count(len(pending))

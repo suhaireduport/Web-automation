@@ -15,6 +15,7 @@ class MyNotesPage(SectionPage):
     """
 
     URL = f"{BASE_URL}/home/questionLibrary/contents/note"
+    PROGRESS_TYPE = "note"
 
     def has_notes(self):
         return self.has_questions()
