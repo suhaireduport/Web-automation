@@ -222,6 +222,9 @@ def test_the_published_rules_are_what_a_quiz_pays(
     page.goto(LeaderboardPage.URL, wait_until="domcontentloaded")
     leaderboard = LeaderboardPage(page)
     leaderboard.wait_for_loaded()
+    # The quizzes above put this student near the top of the board, which is
+    # what has the screen ask for an app rating over everything on it.
+    leaderboard.dismiss_rating_prompt()
     leaderboard.open_info()
     rules = leaderboard.get_rules()
 

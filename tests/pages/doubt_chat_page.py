@@ -71,6 +71,14 @@ class DoubtChatPage:
     def get_disclaimer(self):
         return self.page.locator(".aid-disclaimer")
 
+    def get_read_more_link(self):
+        """Read more at the end of the beta disclaimer. Drawn as bold text, not
+        a link or a button, so it is found by its wording."""
+        return self.get_disclaimer().get_by_text("Read more")
+
+    def click_read_more(self):
+        self.get_read_more_link().click()
+
     # ---------- conversation sidebar ----------
 
     def get_sidebar(self):

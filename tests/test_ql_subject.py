@@ -585,6 +585,9 @@ def test_a_topic_quiz_carries_the_subject_topic_and_chapter_it_was_built_from(
     page, subject_name, recommended_chapter, topic_picker
 ):
     recommended = recommended_chapter
+    # Topics are only drawn under an open chapter, so a recommended chapter the
+    # picker never opens would otherwise read as one with nothing left to do.
+    expect(topic_picker.get_open_chapter_title()).to_have_text(recommended)
     if topic_picker.get_practicable_topics().count() == 0:
         pytest.skip("Every topic of the recommended chapter has been practised")
 
@@ -609,8 +612,9 @@ def test_a_topic_quiz_carries_the_subject_topic_and_chapter_it_was_built_from(
 
 
 def test_the_topic_quiz_runs_as_a_problem_based_quick_practice(
-    page, topic_picker
+    page, recommended_chapter, topic_picker
 ):
+    expect(topic_picker.get_open_chapter_title()).to_have_text(recommended_chapter)
     if topic_picker.get_practicable_topics().count() == 0:
         pytest.skip("Every topic of the recommended chapter has been practised")
 

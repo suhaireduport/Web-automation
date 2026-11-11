@@ -4,3 +4,6 @@ playwright
 # Allure reporting. Run with --alluredir=allure-results, then `allure serve
 # allure-results` (the Allure CLI is a separate Java tool, not a pip package).
 allure-pytest
+
+# HTML reporting. pytest.ini writes reports/report.html on every run.
+pytest-html

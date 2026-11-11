@@ -21,6 +21,7 @@ What is deliberately not here, because it is already covered:
   What is here is the quiz card itself.
 """
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect
 
 from conftest import STUDENT_MOBILE
@@ -77,6 +78,8 @@ def find_checkpoint(page, answered=None):
     string saying what the search turned up instead."""
     looked_at = 0
     with_quiz = 0
+    pretests = 0
+    not_loading = 0
 
     for subject_index in range(SUBJECTS_TO_TRY):
         topics = walk_to_subtopics(page, subject_index)
@@ -85,15 +88,25 @@ def find_checkpoint(page, answered=None):
 
         subtopics = topics.get_all_subtopics()
         for index in range(min(subtopics.count(), SUBTOPICS_TO_TRY)):
-            topics.open_subtopic_at(index)
-            subtopic = SubtopicPage(page)
-            subtopic.wait_for_player_loaded()
-            looked_at += 1
-
-            if subtopic.get_quiz_strip_items().count() == 0:
+            if index:
                 page.go_back()
                 topics.wait_for_topics_loaded()
                 topics.expand_all_topics()
+
+            topics.open_subtopic_at(index)
+            subtopic = SubtopicPage(page)
+            looked_at += 1
+
+            try:
+                on_video = opens_on_the_video(subtopic)
+            except PlaywrightTimeoutError:
+                not_loading += 1
+                continue
+            if not on_video:
+                pretests += 1
+                continue
+
+            if subtopic.get_quiz_strip_items().count() == 0:
                 continue
 
             with_quiz += 1
@@ -101,31 +114,48 @@ def find_checkpoint(page, answered=None):
             if found and (answered is None or subtopic.quiz_is_answered() == answered):
                 return subtopic
 
-            page.go_back()
-            topics.wait_for_topics_loaded()
-            topics.expand_all_topics()
-
     wanted = {True: "an answered", False: "an unanswered", None: "a"}[answered]
     return (
         f"No subtopic offered {wanted} checkpoint quiz: {looked_at} subtopics "
         f"opened across {SUBJECTS_TO_TRY} subjects, {with_quiz} of them carrying "
-        f"a quiz at all"
+        f"a quiz at all, {pretests} opening on a pretest and {not_loading} whose "
+        f"video would not load"
     )
+
+
+def opens_on_the_video(subtopic):
+    """Wait for the player, or for the pretest screen some subtopics open on
+    instead. A pretest is a quiz of its own, with I don't know and Submit, and
+    not the checkpoint this file is about, so it is passed over."""
+    subtopic.page.locator("video.pl-video, .pl-pretest-intro").first.wait_for(
+        timeout=30000
+    )
+    if subtopic.get_pretest_intro().count():
+        return False
+    subtopic.wait_for_player_loaded()
+    return True
 
 
 def open_quiz_card(subtopic):
     """Bring the quiz card up in a subtopic that has one.
 
-    The strip is walked rather than the video watched through: every item of
-    the subtopic is on it, and a checkpoint that has been reached before can be
-    opened straight from there."""
-    items = subtopic.get_strip_items()
-    for index in range(items.count()):
-        items.nth(index).click()
-        subtopic.page.wait_for_timeout(1500)
-        if subtopic.get_quiz_card().count():
-            return True
-    return False
+    The strip circles are status only - tapping one does nothing - so the card
+    is reached the way a student reaches it: Proceed to Quiz under a finished
+    video. A video not finished yet is played out first."""
+    if subtopic.get_quiz_card().count():
+        return True
+
+    try:
+        subtopic.get_replay_overlay().wait_for(timeout=5000)
+    except PlaywrightTimeoutError:
+        subtopic.watch_to_the_end()
+
+    subtopic.click_continue()
+    try:
+        subtopic.get_quiz_card().wait_for(timeout=10000)
+    except PlaywrightTimeoutError:
+        return False
+    return True
 
 
 @pytest.fixture

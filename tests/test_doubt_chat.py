@@ -10,6 +10,7 @@ from pages.doubt_chat_page import DoubtChatPage
 
 HOME_URL = "https://eduport-react.pages.dev/"
 CHAT_URL = "https://eduport-react.pages.dev/ai/doubt-clearance"
+TERMS_URL = "https://eduport-react.pages.dev/terms"
 
 SAMPLE_IMAGE = str(Path(__file__).parent / "data" / "doubt_question.png")
 
@@ -66,6 +67,29 @@ def test_suggestion_chips_are_offered(chat_page):
 def test_beta_disclaimer_is_shown(chat_page):
     expect(chat_page.get_disclaimer()).to_contain_text("beta")
     chat_page.page.wait_for_timeout(1500)
+
+
+def test_beta_disclaimer_offers_read_more(chat_page):
+    expect(chat_page.get_read_more_link()).to_be_visible()
+    expect(chat_page.get_read_more_link()).to_have_text("Read more")
+
+
+# ---------------------------------------------------------------------------
+# Read more on the beta disclaimer opens the terms
+#
+# The app's own terms page is at /terms, and the T&C links on the login screen
+# and the Profile page already open it. Read more is currently drawn as plain
+# bold text with no link and no click handler, so tapping it leaves the chat as
+# it was.
+#
+# Not marked xfail: this fails while Read more does nothing, and passes once it
+# opens the terms.
+# ---------------------------------------------------------------------------
+
+def test_read_more_opens_the_terms(page, chat_page):
+    chat_page.click_read_more()
+
+    expect(page).to_have_url(TERMS_URL)
 
 
 def test_conversation_sidebar_exists(chat_page):

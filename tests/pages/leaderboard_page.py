@@ -268,6 +268,37 @@ class LeaderboardPage:
         """The coin rules an empty tab shows in place of a list."""
         return self.page.locator(".lb-info-panel")
 
+    # ---------- app rating prompt ----------
+    #
+    # "How's your experience so far?" is raised by this screen itself, a moment
+    # after the list renders, whenever the signed in student ranks in the top
+    # tenth of the tab - and only until it has been closed once on this browser.
+    # Its backdrop covers the whole screen and takes every tap.
+
+    # How long a visit is given to raise the prompt. It mounts a few
+    # milliseconds after the list, so this is headroom, not an expected wait.
+    RATING_PROMPT_TIMEOUT = 2000
+
+    def get_rating_overlay(self):
+        return self.page.locator(".arp-overlay")
+
+    def get_rating_close_button(self):
+        return self.get_rating_overlay().locator("button.arp-close")
+
+    def dismiss_rating_prompt(self, timeout=RATING_PROMPT_TIMEOUT):
+        """Close the rating prompt if this visit raises one.
+
+        Waited for briefly rather than checked for once, since a check made the
+        moment the list is up can land just before it mounts. Closed with its
+        own button, the way a student would. Returns whether it was there."""
+        try:
+            self.get_rating_overlay().wait_for(state="visible", timeout=timeout)
+        except PlaywrightTimeoutError:
+            return False
+        self.get_rating_close_button().click()
+        self.get_rating_overlay().wait_for(state="detached")
+        return True
+
     # ---------- how to get coins ----------
 
     def get_info_button(self):
