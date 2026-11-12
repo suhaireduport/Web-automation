@@ -1,9 +1,9 @@
-pytest
-playwright
+pytest==9.1.1
+playwright==1.61.0
 
 # Allure reporting. Run with --alluredir=allure-results, then `allure serve
 # allure-results` (the Allure CLI is a separate Java tool, not a pip package).
-allure-pytest
+allure-pytest==2.16.1
 
 # HTML reporting. pytest.ini writes reports/report.html on every run.
-pytest-html
+pytest-html==4.2.0
