@@ -93,17 +93,24 @@ def current_profile(home_page):
 
 @pytest.fixture
 def edit_page(home_page, current_profile):
-    """Opened the way a user reaches it now: the avatar opens the Profile page,
-    and the pencil on the avatar there opens Edit Details.
+    """Edit Details, entered with the Profile page behind it.
+
+    The pencil on the Profile avatar used to route here, but as of 2026-11 it
+    opens an avatar picker instead, and nothing on the Profile page links to
+    /profile/edit any more. Whether the page can still be reached from Profile
+    is checked on its own by test_edit_details_page_opens_from_the_profile_menu.
+
+    So the Profile page is opened the way a user reaches it and the edit page
+    is then loaded by its URL. Save goes back to the previous page in the
+    browser history, so Profile has to be there for it to return to /profile.
+    Back, on a page loaded this way, goes to home instead.
 
     The form is filled in from the profile a moment after the page renders, and
     that arrives late enough to overwrite anything typed first, so wait for the
     saved name to land before handing the page over."""
     home_page.open_profile_menu()
-
-    profile_page = ProfilePage(home_page.page)
-    profile_page.wait_for_loaded()
-    profile_page.open_edit_details()
+    ProfilePage(home_page.page).wait_for_loaded()
+    home_page.page.goto(EDIT_PROFILE_URL, wait_until="domcontentloaded")
 
     edit_page = EditProfilePage(home_page.page)
     expect(edit_page.get_page()).to_be_visible()
@@ -136,11 +143,22 @@ def restore_profile(home_page, current_profile):
 # ---------------------------------------------------------------------------
 # Scenario:   Edit Details opens from the profile menu
 # Pre:        signed in, on the home page
-# Steps:      open the profile menu, click Edit details
+# Steps:      open the Profile page from the avatar, click the pencil on it
 # Expected:   /profile/edit with its heading, form and Save button
+#
+# Drives the path itself rather than taking the edit_page fixture, which loads
+# the page by URL. As of 2026-11 the pencil opens a "Change Profile" avatar
+# picker instead, so this fails until Edit Details is reachable from Profile
+# again (or the expected path is changed to whatever replaces it).
 # ---------------------------------------------------------------------------
 
-def test_edit_details_page_opens_from_the_profile_menu(page, edit_page):
+def test_edit_details_page_opens_from_the_profile_menu(page, home_page):
+    home_page.open_profile_menu()
+    profile_page = ProfilePage(page)
+    profile_page.wait_for_loaded()
+    profile_page.open_edit_details()
+
+    edit_page = EditProfilePage(page)
     expect(page).to_have_url(EDIT_PROFILE_URL)
     expect(edit_page.get_title()).to_have_text("Edit Details")
     expect(edit_page.get_form()).to_be_visible()
@@ -372,8 +390,9 @@ def test_leaving_without_saving_discards_the_change(page, edit_page):
 
     edit_page.click_back()
 
-    # Back returns to the Profile page now, not home; home is loaded fresh to
-    # confirm the discarded change never reached the profile.
+    # Where Back lands depends on how Edit was opened (home, when loaded by
+    # URL as here); home is loaded fresh either way, to confirm the discarded
+    # change never reached the profile.
     expect(home_fresh(page).get_greeting()).to_have_text(f"Hello, {saved_name}")
 
 
@@ -409,4 +428,6 @@ def test_edit_details_matches_the_profile_api(page):
         student["unique_student_id"]
     )
 
-    assert edit_page.get_current_course() == student["course_name"]
+    # The API pads course titles with a trailing space; the form shows them
+    # trimmed.
+    assert edit_page.get_current_course() == student["course_name"].strip()

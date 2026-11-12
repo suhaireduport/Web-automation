@@ -372,3 +372,42 @@ def pytest_html_results_table_header(cells):
 def pytest_html_results_table_row(report, cells):
     explanation = getattr(report, "failure_explanation", "")
     cells.append(f'<td class="col-explanation">{html.escape(explanation)}</td>')
+
+
+# ---------------------------------------------------------------------------
+# Terminal summary: the Failure Explanation column from the HTML report, and
+# a single Total line. pytest's own final line already carries the counts and
+# the duration; the total is the one figure it leaves out.
+# ---------------------------------------------------------------------------
+
+SUMMARY_OUTCOMES = ("passed", "failed", "skipped", "xfailed", "xpassed", "error")
+
+
+def pytest_terminal_summary(terminalreporter):
+    stats = terminalreporter.stats
+
+    explained = [
+        report
+        for key in ("failed", "error")
+        for report in stats.get(key, [])
+        if getattr(report, "failure_explanation", "")
+    ]
+    if explained:
+        terminalreporter.section("Failure explanations", red=True)
+        for report in explained:
+            terminalreporter.write_line(report.nodeid, bold=True)
+            terminalreporter.write_line(f"  {report.failure_explanation}")
+
+    counts = [(key, len(stats.get(key, []))) for key in SUMMARY_OUTCOMES]
+    total = sum(count for _, count in counts)
+    if not total:
+        return
+    # "error" is the one outcome pytest pluralises: "1 error", "2 errors".
+    terminalreporter.write_line(
+        f"Total: {total} test{'s' if total != 1 else ''} | "
+        + " | ".join(
+            f"{count} {key}{'s' if key == 'error' and count != 1 else ''}"
+            for key, count in counts
+        ),
+        bold=True,
+    )

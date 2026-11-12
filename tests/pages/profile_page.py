@@ -16,8 +16,10 @@ class ProfilePage:
     Help Center is a hosted form in an iframe, and WhatsApp and Contact Us both
     open the same contact sheet. Call My Mentor dials rather than navigating.
 
-    Edit Details is unchanged and is reached from here through the pencil on the
-    avatar (get_avatar_edit), which routes to /profile/edit.
+    Edit Details (/profile/edit) used to be reached from here through the pencil
+    on the avatar (get_avatar_edit). As of 2026-11 that pencil opens a "Change
+    Profile" avatar picker instead, and nothing on this page links to
+    /profile/edit; the route itself still works when loaded by URL.
     """
 
     URL = "https://eduport-react.pages.dev/profile"
@@ -75,6 +77,10 @@ class ProfilePage:
         return self.page.locator(".pp-avatar-edit")
 
     def open_edit_details(self):
+        """Click the avatar pencil, the way Edit Details used to be opened.
+
+        Kept as the user's path rather than a goto, so tests that call it
+        report whether that path still leads to /profile/edit."""
         self.get_avatar_edit().click()
 
     def get_share_button(self):
