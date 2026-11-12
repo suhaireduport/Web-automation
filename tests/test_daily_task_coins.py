@@ -100,6 +100,7 @@ def take_quiz_once(login_session, state, how):
         pytest.skip(NOTHING_TO_PRACTISE)
 
     practice = taken["practice"]
+    assert isinstance(practice, PracticeQuestionPage), taken
     state.update(
         taken,
         before=before,

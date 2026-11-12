@@ -1,8 +1,16 @@
+import base64
+import html
 import os
+import re
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Browser, Page, sync_playwright
+
+try:
+    from pytest_html import extras as html_extras
+except ImportError:  # pytest-html not installed, or switched off with -p no:html
+    html_extras = None
 
 BASE_URL = "https://eduport-react.pages.dev"
 LOGIN_URL = f"{BASE_URL}/login"
@@ -228,3 +236,139 @@ def login_session(browser, _auth_states, _contexts):
 
     for page in pages:
         page.close()
+
+
+# ---------------------------------------------------------------------------
+# HTML report extras (pytest-html; pytest.ini switches the report on).
+#
+# Every failed test gets a screenshot of the page it was driving and a one-line
+# Failure Explanation column. Both are added to the report only: nothing here
+# changes how a test runs or whether it passes, and Allure is left alone.
+# ---------------------------------------------------------------------------
+
+SCREENSHOT_TIMEOUT = 5000
+EXPLANATION_LIMIT = 300
+
+
+def _page_for_screenshot(item):
+    """The page the failing test was driving.
+
+    The first Playwright page among the test's fixtures. Tests that reach the
+    page through something else (a session fixture, a dict of results) fall
+    back to the newest page still open in the shared browser."""
+    values = list(getattr(item, "funcargs", {}).values())
+    for value in values:
+        if isinstance(value, Page) and not value.is_closed():
+            return value
+    for value in values:
+        if isinstance(value, Browser):
+            open_pages = [
+                page
+                for context in value.contexts
+                for page in context.pages
+                if not page.is_closed()
+            ]
+            if open_pages:
+                return open_pages[-1]
+    return None
+
+
+def _short(text):
+    text = " ".join(text.split())
+    return text if len(text) <= EXPLANATION_LIMIT else text[:EXPLANATION_LIMIT] + "…"
+
+
+def _explain_failure(excinfo, when):
+    """A plain-language reason for a failure, read off the exception."""
+    error = excinfo.value
+    kind = type(error).__name__
+    message = str(error).strip()
+    lines = [line.strip() for line in message.splitlines() if line.strip()]
+    first = lines[0] if lines else kind
+
+    waiting = re.search(r"waiting for (.+)", message)
+    target = waiting.group(1).strip() if waiting else None
+    actual = re.search(r"Actual value: (.+)", message)
+
+    if when == "setup":
+        if "Send OTP would not go through" in message:
+            return (
+                "Setup failed at login: the OTP could not be sent because a "
+                "code is still live for this number (OTP lockout). Usually "
+                "passes on a re-run a minute later."
+            )
+        return _short(
+            f"The test never started: a fixture (login, browser or test data) "
+            f"failed during setup with {kind}: {first}"
+        )
+
+    if kind == "TimeoutError":
+        reason = f"Timed out: {first}"
+        if target:
+            reason += f" Waiting for {target}."
+        return _short(
+            reason + " The element was missing, hidden or renamed, or the page "
+            "or API was too slow."
+        )
+
+    if isinstance(error, AssertionError) and re.match(
+        r"(Locator|Page) expected", first
+    ):
+        reason = f"UI check failed: {first}."
+        if actual:
+            reason += f" Actual: {actual.group(1).strip()}."
+        if target:
+            reason += f" Element: {target}."
+        return _short(reason)
+
+    if isinstance(error, AssertionError):
+        return _short(
+            "Assertion failed: what the app showed or returned did not match "
+            f"what the test expected. {first}"
+        )
+
+    if "has been closed" in message or "net::ERR" in message:
+        return _short(f"The browser page closed or a navigation failed: {first}")
+
+    if isinstance(error, (KeyError, IndexError, TypeError, AttributeError, ValueError)):
+        return _short(
+            f"The test code hit a {kind} ({first}): the page or API returned "
+            "data in a shape the test did not expect."
+        )
+
+    return _short(f"{kind}: {first}")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if not report.failed or report.when not in ("setup", "call") or not call.excinfo:
+        return
+
+    report.failure_explanation = _explain_failure(call.excinfo, report.when)
+
+    if html_extras is None:
+        return
+    page = _page_for_screenshot(item)
+    if page is None:
+        return
+    try:
+        png = page.screenshot(timeout=SCREENSHOT_TIMEOUT)
+    except Exception as error:
+        print(f"no failure screenshot for {item.nodeid}: {error}")
+        return
+    report.extras = getattr(report, "extras", []) + [
+        html_extras.png(base64.b64encode(png).decode(), "Screenshot on failure")
+    ]
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_html_results_table_header(cells):
+    cells.append('<th class="explanation">Failure Explanation</th>')
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_html_results_table_row(report, cells):
+    explanation = getattr(report, "failure_explanation", "")
+    cells.append(f'<td class="col-explanation">{html.escape(explanation)}</td>')
