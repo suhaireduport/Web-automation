@@ -82,6 +82,9 @@ def open_leaderboard(page):
     page.goto(LeaderboardPage.URL, wait_until="domcontentloaded")
     leaderboard = LeaderboardPage(page)
     leaderboard.wait_for_loaded()
+    # A student in the top tenth of a tab is asked to rate the app, and the
+    # prompt's backdrop takes every tap until it is closed.
+    leaderboard.dismiss_rating_prompt()
     return leaderboard
 
 

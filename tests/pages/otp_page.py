@@ -11,8 +11,9 @@ class OtpPage:
     "Verify & Continue" is a status button and stays disabled throughout.
 
     Resend is time gated. A countdown runs first ("Resend in (0:27s)"); only
-    once it reaches zero does a single "Resend OTP" button appear. The old
-    split of SMS and WhatsApp is gone.
+    once it reaches zero does a single "Resend OTP" button appear. That button
+    sends nothing itself: it raises a "Resend OTP via" sheet offering SMS or
+    WhatsApp, and the code goes out when one of the two is chosen.
     """
 
     URL = "https://eduport-react.pages.dev/otp"
@@ -153,6 +154,19 @@ class OtpPage:
 
     def click_resend(self):
         self.get_resend_button().click()
+
+    def get_resend_sheet(self):
+        return self.page.locator(".ors-sheet")
+
+    def get_resend_sheet_title(self):
+        return self.page.locator(".ors-title")
+
+    def get_resend_option(self, channel):
+        """channel is "SMS" or "WhatsApp", as the sheet names them."""
+        return self.page.locator(".ors-option").filter(has_text=f"Get OTP via {channel}")
+
+    def choose_resend_channel(self, channel):
+        self.get_resend_option(channel).click()
 
     # ---------- feedback ----------
 

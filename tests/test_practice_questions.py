@@ -16,8 +16,9 @@ What the flow calls, read off the running app rather than assumed:
                 and the last one answers with the tally for the whole set.
 
 Note these are the non-adaptive endpoints. PROBLEM_QUIZ_API and SUBMIT_API in
-pages/practice_page.py name a problem-quiz pair instead, which this flow never
-calls - Quick practice is the only mode the setup screen now offers.
+pages/practice_page.py name the problem-quiz pair instead, which this flow never
+calls. The setup screen can offer both modes and preselects Problem based where
+it does, so Quick practice is asked for by name.
 
 What is deliberately not here, because it is covered already:
 
@@ -40,13 +41,13 @@ from pages.daily_tasks_page import DailyTasksPage
 from pages.home_page import HomePage
 from pages.practice_page import (
     AddTopicsPage,
-    PracticeConfigPage,
-    PracticeQuestionPage,
+    QUICK_PRACTICE,
     answer_key,
     answer_question,
     open_practice_from_home,
     right_answers,
     signature,
+    start_quick_practice,
     CORRECT,
     DONT_KNOW,
     TYPED_INPUTS,
@@ -95,24 +96,17 @@ def start_practice(page, questions=1, minimum=1):
         else None,
     )
 
-    add_topics = open_practice_from_home(page)
-    subject = add_topics.get_active_subject()
-    chapter, topic, _ = add_topics.select_practicable_topic(minimum=minimum)
-    if topic is None:
+    # Quick practice is asked for by name: the setup screen preselects Problem
+    # based on topics that offer both, and that is a different quiz served
+    # through a different call.
+    practice, practised = start_quick_practice(
+        page, questions=questions, minimum=minimum, mode=QUICK_PRACTICE, take_test=False
+    )
+    if practice is None:
+        if practised:
+            pytest.skip(practised["reason"])
         pytest.skip(NO_TOPIC if minimum == 1 else NO_LONG_TOPIC)
-    add_topics.click_continue()
-
-    config = PracticeConfigPage(page)
-    config.wait_for_loaded()
-    if config.get_count(questions).count():
-        config.select_count(questions)
-    else:
-        config.select_smallest_count()
-    config.start()
-
-    practice = PracticeQuestionPage(page)
-    practice.get_take_test_button().wait_for(timeout=30000)
-    return practice, {"subject": subject, "chapter": chapter, "topic": topic}, served
+    return practice, practised, served
 
 
 @pytest.fixture
@@ -507,7 +501,9 @@ def test_the_practice_is_created_for_the_topic_that_was_picked(page):
     assert created.value.status == 201
     task = created.value.json()["task"]
 
-    assert task["topic_title"] == practised["topic"]
+    # The API pads topic titles with a trailing space; the picker shows them
+    # trimmed.
+    assert task["topic_title"].strip() == practised["topic"]
     assert task["questions_count"] == int(practice.get_question_total().inner_text())
     assert task["is_completed"] is False
     assert str(task["id"]) in page.url, (
@@ -540,7 +536,9 @@ def test_the_question_on_screen_matches_the_quiz_api(question_screen):
     else:
         expect(practice.get_numeric_input()).to_have_count(0)
 
-    shown = signature(practice.get_question().inner_html())
+    # Read back with each typeset formula swapped for its source, as the options
+    # are: the rendered maths is nothing like the markup it was served as.
+    shown = signature(practice.get_question_source())
     assert shown == signature(first["question_description"])
 
 

@@ -12,6 +12,7 @@ rather than a shared account - a shared one may still be holding a code from an
 earlier test.
 """
 import random
+import re
 
 import allure
 import pytest
@@ -224,7 +225,8 @@ def test_sending_a_code_moves_to_the_otp_screen_and_calls_the_api(page, login_pa
     with allure.step("What was posted is the chosen code and the number entered"):
         posted = answer.value.request.post_data
         allure.attach(posted, "get-4-digit request", allure.attachment_type.TEXT)
-        assert "+91" + mobile in posted.replace(" ", "")
+        # The dial code is sent without its "+": the app strips it on purpose.
+        assert posted_phone_number(posted) == "91" + mobile
 
     with allure.step("The OTP screen comes up carrying that number"):
         page.wait_for_url(OTP_URL, timeout=30000)
@@ -342,6 +344,13 @@ NINE_DIGIT_COUNTRY = "Australia"
 NINE_DIGIT_CODE = "+61"
 
 
+def posted_phone_number(body):
+    """The phone_number field of a get-4-digit form post."""
+    match = re.search(r'name="phone_number"\r?\n\r?\n([^\r\n]*)', body)
+    assert match, f"get-4-digit posted no phone_number: {body!r}"
+    return match.group(1)
+
+
 def serve_otp_sent(page):
     """Answer the send in the browser, the way the backend answers a good one."""
     posted = {}
@@ -389,8 +398,8 @@ def test_the_dial_code_posted_is_the_country_chosen(page, login_page):
 
     with allure.step(f"The body carries {NINE_DIGIT_CODE} and not +91"):
         allure.attach(posted["body"], "get-4-digit request", allure.attachment_type.TEXT)
-        assert (NINE_DIGIT_CODE + number) in posted["body"].replace(" ", "")
-        assert "+91" not in posted["body"]
+        # Sent without the "+", which the app strips from the dial code.
+        assert posted_phone_number(posted["body"]) == NINE_DIGIT_CODE.lstrip("+") + number
 
 
 @allure.story("The country decides the number")

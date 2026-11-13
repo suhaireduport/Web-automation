@@ -1,5 +1,7 @@
 import re
 
+from playwright.sync_api import expect
+
 from pages.question_library_section_page import normalise
 
 
@@ -308,6 +310,9 @@ class ExamInstructionsPage:
         return self.get_duration().inner_text().strip()
 
     def get_total_questions_count(self):
+        """The stat reads "…" until the exam's details are back, so it is
+        waited on until it holds a number."""
+        expect(self.get_total_questions()).to_have_text(re.compile(r"^\s*\d+\s*$"))
         return int(self.get_total_questions().inner_text().strip())
 
     def get_duration_minutes(self):
@@ -567,7 +572,8 @@ class ExamReviewPage:
     # ---------- note ----------
 
     def get_note_button(self):
-        return self.page.locator(".erp-note-fab")
+        # The pen is one shared QuizNoteFab component on every question screen.
+        return self.page.locator(".qnf-btn")
 
     def click_note(self):
         self.get_note_button().click()

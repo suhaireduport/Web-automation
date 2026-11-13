@@ -5,7 +5,7 @@ from html import unescape
 from playwright.sync_api import Error as PlaywrightError
 
 from pages.home_page import HomePage
-from pages.leaderboard_page import read_balance, read_coin_log
+from pages.leaderboard_page import call_api, read_balance, read_coin_log
 from pages.question_library_section_page import BASE_URL, normalise
 
 
@@ -165,6 +165,51 @@ class AddTopicsPage:
                 self.select_topic(chapter_index, topic_index)
                 return chapter, topic, (chapter_index, topic_index)
         return None, None, None
+
+    def select_topic_offering(self, mode, minimum=1, skip=()):
+        """Pick a topic that still has questions left in the given mode.
+
+        The setup screen only offers a mode while the topic has questions left
+        in it, and the picker does not show which mode those are. They are in
+        subjects/subject-hierarchy, the call the picker is drawn from, so the
+        topic is found there and then picked on screen the way a student would:
+        its subject tab, its chapter, the topic.
+
+        Hands back (subject, chapter, topic, position), with position the key
+        skip holds for a topic already tried, or four Nones."""
+        for subject, chapter, topic in topics_offering(self.page, mode, minimum):
+            if (subject, chapter, topic) in skip:
+                continue
+            picked = self.select_topic_named(subject, chapter, topic)
+            if picked is not None:
+                return (subject, *picked, (subject, chapter, topic))
+        return None, None, None, None
+
+    def select_topic_named(self, subject, chapter, topic):
+        """Pick a topic by the names the API gives it. Returns the chapter and
+        topic as the picker shows them, or None if they are not on screen."""
+        subjects = self.get_subject_names()
+        if subject not in subjects:
+            return None
+        self.click_tab(subjects.index(subject))
+        self.get_active_tab().filter(has_text=subject).wait_for()
+
+        for chapter_index in range(self.chapter_count()):
+            shown_chapter = self.get_chapter_title(chapter_index).inner_text().strip()
+            if normalise(shown_chapter) != bare_title(chapter):
+                continue
+            self.open_chapter(chapter_index)
+            for topic_index in range(self.get_topics(chapter_index).count()):
+                # Shown as "<n>. <title>": the number is the picker's own.
+                shown_topic = re.sub(
+                    r"^\d+\.\s*",
+                    "",
+                    self.get_topic_title(chapter_index, topic_index).inner_text().strip(),
+                )
+                if normalise(shown_topic) == bare_title(topic):
+                    self.select_topic(chapter_index, topic_index)
+                    return shown_chapter, shown_topic
+        return None
 
     # ---------- footer ----------
 
@@ -509,7 +554,8 @@ class PracticeQuestionPage:
         )
 
     def get_note_button(self):
-        return self.page.locator(".tq-note-fab")
+        # The pen is one shared QuizNoteFab component on every question screen.
+        return self.page.locator(".qnf-btn")
 
     def get_report_button(self):
         return self.page.locator(".tq-icon-btn[aria-label='Report issue']")
@@ -676,11 +722,20 @@ def start_quick_practice(page, questions=1, minimum=1, mode=None, take_test=True
         # screen and Practice is only reachable from home.
         page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
         add_topics = open_practice_from_home(page)
-        subject = add_topics.get_active_subject()
-        chapter, topic, where = add_topics.select_practicable_topic(
-            minimum=minimum, skip=tried
-        )
+        if mode is None:
+            subject = add_topics.get_active_subject()
+            chapter, topic, where = add_topics.select_practicable_topic(
+                minimum=minimum, skip=tried
+            )
+        else:
+            subject, chapter, topic, where = add_topics.select_topic_offering(
+                mode, minimum=minimum, skip=tried
+            )
         if topic is None:
+            if mode is not None and not offered:
+                return None, {
+                    "reason": f"No topic on this account has {mode!r} questions left"
+                }
             if offered:
                 # There were topics to practise; none of them would give this
                 # mode, which is a different thing from having nothing left.
@@ -765,6 +820,35 @@ QUIZ_APIS = {
         "practice-quiz/submit/non-adaptive-quiz",
     ),
 }
+
+# Where subjects/subject-hierarchy counts each mode's questions on a topic, as
+# {"total": n, "attended": n}.
+HIERARCHY_COUNTS = {PROBLEM_BASED: "problem_practice", QUICK_PRACTICE: "quick_practice"}
+SUBJECT_HIERARCHY_API = "/subjects/subject-hierarchy"
+
+
+def bare_title(title):
+    """A subject-hierarchy title the way the picker prints it: the app drops a
+    leading number and trims, and the browser collapses whitespace."""
+    return normalise(re.sub(r"^\s*\d+\.?\s*", "", title))
+
+
+def topics_offering(page, mode, minimum=1):
+    """Every topic with at least minimum questions left in the given mode, as
+    (subject, chapter, topic) in the order the picker lists them."""
+    counts_key = HIERARCHY_COUNTS[mode]
+    found = []
+    for subject in call_api(page, SUBJECT_HIERARCHY_API)["subjects"]:
+        for chapter in subject["chapters"]:
+            for topic in chapter["topics"]:
+                counts = topic.get(counts_key) or {}
+                left = (counts.get("total") or 0) - (counts.get("attended") or 0)
+                if left >= minimum:
+                    found.append(
+                        (subject["title"].strip(), chapter["title"], topic["title"])
+                    )
+    return found
+
 
 # What the result screen calls itself, per mode. The rules screen a set opens
 # on names it the same way.

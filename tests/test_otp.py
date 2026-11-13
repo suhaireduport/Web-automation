@@ -221,17 +221,21 @@ def test_resend_appears_once_the_countdown_ends(otp_new_number):
 
 
 def test_resend_asks_for_a_fresh_code(page, otp_new_number):
-    """Tapping Resend posts otp/resend for the same number and restarts the
-    countdown, which locks the button away again."""
+    """Tapping Resend asks how the code should come, and choosing SMS posts
+    otp/resend for the same number and restarts the countdown, which locks the
+    button away again."""
     assert otp_new_number.resend_available(timeout=45000)
 
+    otp_new_number.click_resend()
+    expect(otp_new_number.get_resend_sheet_title()).to_have_text("Resend OTP via")
+
     with page.expect_response("**/api/v3/otp/resend") as answer:
-        otp_new_number.click_resend()
+        otp_new_number.choose_resend_channel("SMS")
     assert answer.value.status == 200
 
-    page.wait_for_timeout(1000)
-    assert otp_new_number.resend_seconds_left() > 0
+    expect(otp_new_number.get_resend_sheet()).to_have_count(0)
     expect(otp_new_number.get_resend_button()).to_have_count(0)
+    assert otp_new_number.resend_seconds_left() > 0
 
 
 # ---------------------------------------------------------------------------

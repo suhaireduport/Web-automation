@@ -13,6 +13,7 @@ from playwright.sync_api import expect
 from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.profile_page import ProfilePage
+from pages.question_library_section_page import normalise
 from pages.subscription_page import SubscriptionPage
 
 
@@ -82,11 +83,13 @@ def test_subscription_cards_match_the_subscriptions_api(page):
 
     # The card leads with the course and names the plan under it, which is the
     # other way round from the payload.
-    courses = [text.strip() for text in subscriptions.get_courses().all_inner_texts()]
-    plans = [text.strip() for text in subscriptions.get_plans().all_inner_texts()]
+    # Whitespace is compared collapsed: a title can be served with a double
+    # space in it, and the page renders any run of spaces as one.
+    courses = [normalise(text) for text in subscriptions.get_courses().all_inner_texts()]
+    plans = [normalise(text) for text in subscriptions.get_plans().all_inner_texts()]
 
-    assert courses == [one["course"].strip() for one in served]
-    assert plans == [one["title"].strip() for one in served]
+    assert courses == [normalise(one["course"]) for one in served]
+    assert plans == [normalise(one["title"]) for one in served]
 
 
 def test_subscription_status_badges_match_the_subscriptions_api(page):

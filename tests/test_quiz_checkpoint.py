@@ -338,8 +338,7 @@ def test_the_note_control_on_the_card_opens_something_to_write_in(
 def test_answering_a_checkpoint_freezes_it_and_shows_the_right_answer(
     page, fresh_checkpoint
 ):
-    fresh_checkpoint.select_quiz_option(0)
-    page.wait_for_timeout(4000)
+    fresh_checkpoint.answer_quiz_option(0)
 
     assert fresh_checkpoint.quiz_is_answered()
     assert fresh_checkpoint.get_correct_quiz_option().count() == 1
@@ -353,8 +352,7 @@ def test_answering_a_checkpoint_moves_the_balance_by_what_it_is_worth(
     the right option is not on screen until it has been answered."""
     before = read_balance(page)
 
-    fresh_checkpoint.select_quiz_option(0)
-    page.wait_for_timeout(5000)
+    fresh_checkpoint.answer_quiz_option(0)
 
     got_it_right = fresh_checkpoint.get_wrong_quiz_option().count() == 0
     expected = before + (PER_CORRECT if got_it_right else PER_WRONG)
@@ -368,8 +366,7 @@ def test_answering_a_checkpoint_moves_the_balance_by_what_it_is_worth(
 def test_what_a_checkpoint_paid_is_written_into_todays_coin_log(page, fresh_checkpoint):
     before = read_balance(page)
 
-    fresh_checkpoint.select_quiz_option(0)
-    page.wait_for_timeout(5000)
+    fresh_checkpoint.answer_quiz_option(0)
 
     after = read_balance(page)
     events = read_coin_log(page, "log-today")

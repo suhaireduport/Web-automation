@@ -169,7 +169,8 @@ class LiveExamPage:
     # ---------- actions ----------
 
     def get_note_button(self):
-        return self.page.locator(".ep-note-fab")
+        # The pen is one shared QuizNoteFab component on every question screen.
+        return self.page.locator(".qnf-btn")
 
     def get_mark_button(self):
         return self.page.locator(".ep-mark-btn")

@@ -217,12 +217,21 @@ def test_the_intro_counts_the_questions_the_call_served(page, topics, quiz):
 
     with page.expect_response(lambda response: QUIZ_APIS[kind] in response.url) as answer:
         topics.open_quiz(normalise(topic["title"]), QUIZ_ROW_LABELS[kind])
-    served = answer.value.json()["questions"]
+    payload = answer.value.json()
+    served = payload["questions"]
 
     quiz_page = TopicQuizPage(page)
     quiz_page.wait_for_intro()
     expect(quiz_page.get_question_total()).to_have_text(str(len(served)))
-    expect(quiz_page.get_take_test_button()).to_have_text("Take test")
+
+    # The survey only hands over quizzes nobody has finished, but one can have
+    # been started: the call then carries answers to some of its questions,
+    # and the intro offers to resume rather than to start.
+    answered = {one["question_id"] for one in payload.get("answers") or []}
+    started = any(question["id"] in answered for question in served)
+    expect(quiz_page.get_take_test_button()).to_have_text(
+        "Resume Test" if started else "Take test"
+    )
 
 
 def test_the_intro_names_the_quiz_and_how_it_behaves(page, quiz_survey):

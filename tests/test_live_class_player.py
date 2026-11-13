@@ -31,6 +31,7 @@ from pages.live_class_player_page import (
     LiveClassesPage,
     LivePlayerPage,
     is_premium,
+    is_zoom,
     live_classes,
     live_detail,
     opens_from_list,
@@ -87,6 +88,18 @@ def free_class(streamed):
 
 
 @pytest.fixture
+def youtube_live_class(streamed):
+    """A streamed class a tap plays that is not held on Zoom: the player asks
+    youtube/live about every class but a Zoom one."""
+    openable = [
+        live for live in streamed if opens_from_list(live, STREAMED) and not is_zoom(live)
+    ]
+    if not openable:
+        pytest.skip("Every streamed class a tap plays on this account is a Zoom class")
+    return next((live for live in openable if live.get("stream_link")), openable[0])
+
+
+@pytest.fixture
 def premium_class(streamed):
     locked = next((live for live in streamed if is_premium(live)), None)
     if locked is None:
@@ -135,12 +148,14 @@ def test_the_route_carries_what_the_list_knows_about_the_class(page, player, fre
     assert query_of(page.url) == route_query(free_class)
 
 
-def test_opening_the_player_asks_youtube_live_for_that_class(page, live_list, free_class):
+def test_opening_the_player_asks_youtube_live_for_that_class(
+    page, live_list, youtube_live_class
+):
     with page.expect_response(lambda response: LIVE_DETAIL_PATH in response.url) as answer:
-        live_list.open_class(free_class)
+        live_list.open_class(youtube_live_class)
 
     assert answer.value.status == 200, f"youtube/live answered {answer.value.status}"
-    assert f"{LIVE_DETAIL_PATH}{free_class['id']}" in answer.value.url
+    assert f"{LIVE_DETAIL_PATH}{youtube_live_class['id']}" in answer.value.url
 
 
 def test_a_premium_class_raises_the_premium_sheet_instead(page, live_list, premium_class):

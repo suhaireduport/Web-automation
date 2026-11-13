@@ -37,7 +37,7 @@ class TopicPage:
         return self.page.locator(".tp-title")
 
     def get_subject_icon(self):
-        return self.page.locator(".tp-subject-icon")
+        return self.page.locator(".tp-header img.subject-icon-tile")
 
     def get_back_button(self):
         return self.page.locator(".tp-back")

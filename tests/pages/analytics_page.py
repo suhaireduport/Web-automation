@@ -171,7 +171,7 @@ class AnalyticsPage:
         return self.get_card("Syllabus Tracker")
 
     def get_syllabus_more_button(self):
-        return self.page.locator(".an-more-btn-red")
+        return self.get_syllabus_tracker_card().locator(".an-more-btn")
 
     def click_syllabus_more(self):
         self.get_syllabus_more_button().click()

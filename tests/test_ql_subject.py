@@ -14,6 +14,7 @@ bookmark puts it back the way it found it, and the practice is started but not
 answered, so its questions stay in the pool.
 """
 import re
+from urllib.parse import quote
 
 import pytest
 from playwright.sync_api import expect
@@ -570,7 +571,9 @@ def test_practice_now_opens_the_topic_picker_for_that_chapter(
     expect(topic_picker.get_page()).to_be_visible()
     expect(topic_picker.get_title()).to_have_text("Add topics")
 
-    expect(page).to_have_url(re.compile(re.escape(recommended.replace(" ", "%20"))))
+    # The chapter is in the route percent encoded, the way encodeURIComponent
+    # writes it - every non ASCII letter of a Malayalam title included.
+    expect(page).to_have_url(re.compile(re.escape(quote(recommended, safe="!'()*"))))
     expect(topic_picker.get_open_chapter_title()).to_have_text(recommended)
 
 

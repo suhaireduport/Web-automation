@@ -24,6 +24,7 @@ from pages.mistake_book_page import (
 )
 from pages.practice_page import (
     QUESTION_APIS,
+    QUICK_PRACTICE,
     WRONG,
     answer_key,
     choose_typed_answer,
@@ -105,12 +106,16 @@ def mistaken(login_session, _mistake_state):
         served.clear()
         page.on("response", collect)
         try:
-            practice, practised = start_quick_practice(page)
+            # Asked for by name: Problem based, which the setup screen
+            # preselects where a topic offers both, follows a wrong answer
+            # with a similar question, so the set no longer ends after one
+            # answer per question.
+            practice, practised = start_quick_practice(page, mode=QUICK_PRACTICE)
         finally:
             page.remove_listener("response", collect)
         if practice is None:
-            _mistake_state["reason"] = NO_QUESTIONS
-            pytest.skip(NO_QUESTIONS)
+            _mistake_state["reason"] = (practised or {}).get("reason", NO_QUESTIONS)
+            pytest.skip(_mistake_state["reason"])
 
         key = {}
         for payload in served:

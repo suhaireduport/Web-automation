@@ -25,6 +25,10 @@ PLAYER_URL_PATTERN = re.compile(
 # Which subject to walk into. int = position on Home, str = exact subject name.
 DEFAULT_SUBJECT = 0
 
+# How far the search for a chapter with a lesson left goes.
+SUBJECT_PROBE_LIMIT = 6
+CHAPTER_PROBE_LIMIT = 3
+
 
 @pytest.fixture
 def page(login_as):
@@ -37,21 +41,57 @@ def subject(request):
     return getattr(request, "param", DEFAULT_SUBJECT)
 
 
-@pytest.fixture
-def topic_page(page, subject):
+@pytest.fixture(scope="session")
+def unfinished_chapter(login_session):
+    """The topic list of a chapter that still has a lesson left, found once for
+    the whole run.
 
+    The topic list opens on the lesson to continue from: it expands that topic
+    and offers Continue. A chapter whose every lesson is done has nothing to
+    continue, so it opens with every topic folded and no Continue at all, which
+    is the app working as intended. Which chapters are finished changes as the
+    account is used, so the chapter is found rather than fixed: subjects in
+    Home order, unlocked chapters in list order, the first whose "Lessons
+    Completed" line has lessons still to do."""
+    page = login_session(STUDENT_MOBILE)
     home_page = HomePage(page)
-    home_page.get_subjects().first.wait_for()
-    home_page.open_subject(subject)
+    looked_at = []
 
-    chapter_page = ChapterPage(page)
-    chapter_page.wait_for_chapters_loaded()
+    for index in range(SUBJECT_PROBE_LIMIT):
+        page.goto(HOME_URL, wait_until="domcontentloaded")
+        home_page.get_subjects().first.wait_for()
+        names = home_page.get_subject_names()
+        if index >= len(names):
+            break
+        home_page.open_subject(index)
 
-    unlocked = chapter_page.get_unlocked_chapters()
-    if unlocked.count() == 0:
-        pytest.skip("Every chapter is locked for this subject")
-    unlocked.first.click()
+        chapter_page = ChapterPage(page)
+        chapter_page.wait_for_chapters_loaded()
+        subject_url = page.url
+        unlocked = chapter_page.get_unlocked_chapters().count()
 
+        for chapter in range(min(unlocked, CHAPTER_PROBE_LIMIT)):
+            if chapter:
+                page.goto(subject_url, wait_until="domcontentloaded")
+                chapter_page.wait_for_chapters_loaded()
+            chapter_page.get_unlocked_chapters().nth(chapter).click()
+
+            topics = TopicPage(page)
+            topics.wait_for_topics_loaded()
+            done, total = topics.get_lessons_completed_counts()
+            looked_at.append(f"{names[index]} #{chapter + 1} ({done}/{total})")
+            if done < total:
+                return page.url
+
+    pytest.skip(
+        "Every chapter looked at has all of its lessons completed, so none has a "
+        "lesson to continue from: " + ", ".join(looked_at)
+    )
+
+
+@pytest.fixture
+def topic_page(page, unfinished_chapter):
+    page.goto(unfinished_chapter, wait_until="domcontentloaded")
     topics = TopicPage(page)
     topics.wait_for_topics_loaded()
     return topics

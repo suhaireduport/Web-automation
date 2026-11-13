@@ -457,7 +457,19 @@ class SubtopicPage:
         return self.page.locator(".pl-quiz-letter")
 
     def select_quiz_option(self, index):
+        """Pick an option. This only marks it as chosen: nothing is answered
+        until it is submitted (see answer_quiz_option)."""
         self.get_quiz_option(index).click()
+
+    def get_quiz_submit_button(self):
+        return self.page.locator(".pl-bottom .pl-proceed-btn", has_text="Submit")
+
+    def answer_quiz_option(self, index):
+        """Pick an option and submit it, the way a student answers a
+        checkpoint, and wait for the card to freeze on the marking."""
+        self.select_quiz_option(index)
+        self.get_quiz_submit_button().click()
+        self.page.locator(".pl-quiz-option[disabled]").first.wait_for()
 
     def get_quiz_choose_label(self):
         """"Choose 1 answer" over the options."""
@@ -466,7 +478,8 @@ class SubtopicPage:
     def get_quiz_note_button(self):
         """The note pen on the quiz card. The bookmark sits in the card header
         and the note floats over the options, so they are two locators."""
-        return self.page.locator(".pl-note-fab")
+        # The pen is one shared QuizNoteFab component on every question screen.
+        return self.page.locator(".qnf-btn")
 
     def get_note_editor(self):
         """Whatever the note pen opens to write in."""

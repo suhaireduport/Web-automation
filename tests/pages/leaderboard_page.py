@@ -6,6 +6,23 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 # starts. A board with this many students or fewer is drawn as a plain list.
 PODIUM_PLACES = 3
 
+# The board draws only the top of the list it is served: the first
+# VISIBLE_PLACES students, and then - when the signed in student ranks below
+# that - their own row pinned underneath, numbered with their real rank.
+VISIBLE_PLACES = 20
+
+
+def board_rows(served):
+    """The served rows the board draws, in the order it draws them, each as
+    (the rank it prints, the row)."""
+    drawn = [(place + 1, row) for place, row in enumerate(served[:VISIBLE_PLACES])]
+    mine = next(
+        (place for place, row in enumerate(served) if row["is_current_user"]), None
+    )
+    if mine is not None and mine >= VISIBLE_PLACES:
+        drawn.append((mine + 1, served[mine]))
+    return drawn
+
 
 def podium_name(student):
     """What a podium tile prints for a student: the name up to its first

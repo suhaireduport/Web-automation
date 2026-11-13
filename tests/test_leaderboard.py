@@ -37,6 +37,7 @@ from playwright.sync_api import expect
 from conftest import STUDENT_MOBILE
 from pages.leaderboard_page import (
     LeaderboardPage,
+    board_rows,
     call_api,
     podium_name,
     read_balance,
@@ -132,17 +133,19 @@ def test_a_tab_becomes_the_active_one_when_it_is_opened(leaderboard, tab):
 @pytest.mark.parametrize("tab", TABS)
 def test_the_rank_list_matches_the_leaderboard_api(page, leaderboard, tab):
     """One row per student the call answered with, in the order it answered
-    them, each showing that student's name and that student's coins."""
+    them, each showing that student's name and that student's coins - as far
+    down as the board draws, with the student's own row pinned below that."""
     served = open_tab(page, leaderboard, tab)
+    drawn = [row for _, row in board_rows(served)]
 
-    expect(leaderboard.get_rows()).to_have_count(len(served))
-    if not served:
+    expect(leaderboard.get_rows()).to_have_count(len(drawn))
+    if not drawn:
         return
 
     assert leaderboard.get_names() == [
-        shown_name(leaderboard, index, row) for index, row in enumerate(served)
+        shown_name(leaderboard, index, row) for index, row in enumerate(drawn)
     ]
-    assert leaderboard.get_coins() == [row["coins"] for row in served]
+    assert leaderboard.get_coins() == [row["coins"] for row in drawn]
 
 
 @pytest.mark.parametrize("tab", TABS)
@@ -156,7 +159,7 @@ def test_the_ranks_run_from_one_down_the_order_the_api_returns(
     if not served:
         pytest.skip(f"{tab} has nobody on it")
 
-    assert leaderboard.get_ranks() == list(range(1, len(served) + 1))
+    assert leaderboard.get_ranks() == [rank for rank, _ in board_rows(served)]
 
     coins = [row["coins"] for row in served]
     assert coins == sorted(coins, reverse=True), (
@@ -177,14 +180,18 @@ def test_the_signed_in_student_is_the_row_the_api_flags(page, leaderboard, tab):
         return
 
     assert len(mine) == 1, f"{tab} flagged {len(mine)} rows as the current student"
-    index = mine[0]
+    drawn = board_rows(served)
+    # Where the student's row sits on the board, which is below the drawn top
+    # when they rank lower than that.
+    index = next(place for place, (_, row) in enumerate(drawn) if row["is_current_user"])
+    rank = mine[0] + 1
 
     assert leaderboard.current_row_index() == index
     expect(leaderboard.get_row_name(index)).to_have_text(
-        shown_name(leaderboard, index, served[index])
+        shown_name(leaderboard, index, served[mine[0]])
     )
-    assert leaderboard.get_coins()[index] == served[index]["coins"]
-    assert leaderboard.get_ranks()[index] == index + 1
+    assert leaderboard.get_coins()[index] == served[mine[0]]["coins"]
+    assert leaderboard.get_ranks()[index] == rank
 
 
 @pytest.mark.parametrize("tab", TABS)
@@ -196,15 +203,16 @@ def test_the_rank_arrow_follows_the_movement_the_api_reports(page, leaderboard, 
     if not served:
         pytest.skip(f"{tab} has nobody on it")
 
-    shown = [leaderboard.get_row_delta(index) for index in range(len(served))]
+    drawn = [row for _, row in board_rows(served)]
+    shown = [leaderboard.get_row_delta(index) for index in range(len(drawn))]
     expected = [
         None if leaderboard.is_podium_place(index) else arrow_for(row["rank_delta"])
-        for index, row in enumerate(served)
+        for index, row in enumerate(drawn)
     ]
 
-    assert shown == expected, [row["rank_delta"] for row in served]
+    assert shown == expected, [row["rank_delta"] for row in drawn]
 
-    for index, row in enumerate(served):
+    for index, row in enumerate(drawn):
         if leaderboard.is_podium_place(index):
             expect(leaderboard.get_row_delta_text(index)).to_have_count(0)
         elif row["rank_delta"]:
@@ -337,9 +345,9 @@ def test_only_the_students_own_row_opens_the_log(page, leaderboard):
         sum(1 for row in served if row["is_current_user"])
     )
 
-    for index, row in enumerate(served):
+    for index, (rank, row) in enumerate(board_rows(served)):
         assert leaderboard.is_row_clickable(index) is bool(row["is_current_user"]), (
-            f"row {index + 1} ({row['student']})"
+            f"rank {rank} ({row['student']})"
         )
 
 

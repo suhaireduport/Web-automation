@@ -169,9 +169,10 @@ def test_player_has_playback_controls(video_page):
 
 def test_player_shows_the_current_playback_time(video_page):
     """The readout toggles between time elapsed and time remaining, and the
-    remaining form is signed, so both are accepted."""
+    remaining form is signed, so both are accepted. A video an hour or longer
+    is read out with the hours in front (-4:39:49)."""
     expect(video_page.get_current_time_display()).to_have_text(
-        re.compile(r"^-?\d{1,2}:\d{2}$")
+        re.compile(r"^-?(\d+:)?\d{1,2}:\d{2}$")
     )
 
 
@@ -518,13 +519,16 @@ def test_notes_opens_the_document_in_a_new_tab(page, video_page):
     video_page.wait_until_playing()
     before = video_page.get_current_time()
 
+    # Counted rather than fixed: the signed in context is shared across the
+    # session, so it can be holding other tests' pages as well.
+    tabs_before = len(page.context.pages)
     with page.context.expect_page() as new_tab:
         notes.first.click()
     notes_tab = new_tab.value
     notes_tab.wait_for_load_state("domcontentloaded")
 
     assert notes_tab.url == href
-    assert len(page.context.pages) == 2
+    assert len(page.context.pages) == tabs_before + 1
 
     notes_tab.close()
     page.bring_to_front()
@@ -548,7 +552,7 @@ def test_mini_player_appears_after_leaving_the_player(page, video_page):
     on the topic list you land on when you back out of the player."""
     video_page.click_back()
     page.wait_for_url(TOPICS_URL_PATTERN)
-    page.goto(HOME_URL)
+    page.goto(HOME_URL, wait_until="domcontentloaded")
 
     expect(MiniPlayer(page).get_tile()).to_be_visible()
 

@@ -104,9 +104,16 @@ def route_query(live):
         query["note"] = live["note"]
     if live.get("chat_id"):
         query["chat_id"] = live["chat_id"]
+    if live.get("live_class_type"):
+        query["live_class_type"] = live["live_class_type"]
     if live.get("live_status"):
         query["live_status"] = live["live_status"]
     return query
+
+
+def is_zoom(live):
+    """A class held on Zoom. The player never asks youtube/live about one."""
+    return (live.get("live_class_type") or "").lower() == "zoom"
 
 
 def player_route(live, query=None, prefix="/home/liveClasses/live"):

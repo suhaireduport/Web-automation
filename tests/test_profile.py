@@ -162,9 +162,9 @@ def test_the_stat_tiles_match_the_analysis_api(page):
     assert profile.get_stat_value("Task Completed") == (
         f"{analysis['completed_tasks']}/{analysis['total_tasks']}"
     )
-    # Time spent is drawn in minutes.
+    # time_spend is served in seconds and drawn in whole minutes.
     assert digits(profile.get_stat_value("Time Spent Today")) == str(
-        analysis["time_spend"]
+        analysis["time_spend"] // 60
     )
 
 
