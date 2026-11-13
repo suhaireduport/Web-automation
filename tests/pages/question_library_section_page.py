@@ -1,8 +1,12 @@
 import re
 
+from playwright.sync_api import expect
+
 from pages.leaderboard_page import call_api
 
 BASE_URL = "https://eduport-react.pages.dev"
+
+NOTES_ADD_API = "**/question-bank/notes/add"
 
 
 class SectionPage:
@@ -498,6 +502,20 @@ class SectionQuestionPage:
 
     def get_note_close_button(self):
         return self.page.locator(".nes-close")
+
+    def add_note(self, text):
+        """Write a note with the pen button and save it.
+
+        The sheet closes only once the save call has succeeded, so the call is
+        waited for and handed back for its status to be checked."""
+        self.click_note()
+        editor = self.get_note_editor()
+        editor.click()
+        editor.fill(text)
+        with self.page.expect_response(NOTES_ADD_API) as saved:
+            self.get_note_save_button().click()
+        expect(editor).to_have_count(0)
+        return saved.value
 
     # ---------- bookmark ----------
 

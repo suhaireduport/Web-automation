@@ -3,12 +3,13 @@
 Covers the chapter list, the questions of a chapter and a single question
 opened from it. The other three sections are not covered here.
 
-Every test needs the account to hold at least one note; see the module docstring
-note below for how one is made.
-
-Notes are written from a question, not from the Question Library: open a
-question and use its pen button. The tests skip with that instruction rather
-than fail when an account has none.
+Every test needs the account to hold at least one note on a multiple choice
+question, since the single question tests open the first noted question and
+read its options. When the account holds no note at all, the note_on_an_mcq
+fixture writes one the way a student would, once per run: Question Library ->
+first subject -> first chapter -> the first multiple choice question -> pen ->
+Save. The note stays on the account, so later runs find it and write nothing.
+An account that already holds notes is left as it is.
 """
 import re
 import pytest
@@ -16,8 +17,14 @@ from playwright.sync_api import expect
 
 from conftest import STUDENT_MOBILE
 from pages.home_page import HomePage
+from pages.leaderboard_page import call_api
 from pages.my_notes_page import MyNotesPage, NoteQuestionsPage, NoteQuestionPage
 from pages.question_library_page import QuestionLibraryPage
+from pages.question_library_subject_page import (
+    SubjectPage,
+    SubjectQuestionPage,
+    SubjectQuestionsPage,
+)
 
 
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
@@ -28,9 +35,66 @@ NO_NOTES = (
     "and save one with its pen button to give these tests something to read."
 )
 
+NOTES_PROGRESS = f"/question-bank/progress?type={MyNotesPage.PROGRESS_TYPE}"
+NOTE_TEXT = "Automation test note"
+
+# How many questions of the chapter are opened looking for a multiple choice one.
+QUESTION_PROBE_LIMIT = 10
+
+NO_QUESTION_TO_NOTE = (
+    "This account holds no note, and the first chapter of the first Question "
+    "Library subject offered no multiple choice question to write one on."
+)
+
+
+@pytest.fixture(scope="session")
+def note_on_an_mcq(login_session):
+    """Make sure the account holds a note, writing one on a multiple choice
+    question when it holds none.
+
+    A note is written from a question rather than from My Notes, so the
+    question is reached through the Question Library subject list, which lists
+    the questions already attempted. A typed answer question has no options for
+    the single question tests to read, so those are passed over."""
+    page = login_session(STUDENT_MOBILE)
+    page.goto(QUESTION_LIBRARY_URL, wait_until="domcontentloaded")
+    library = QuestionLibraryPage(page)
+    library.wait_for_loaded()
+
+    if call_api(page, NOTES_PROGRESS)["subjects"]:
+        return
+
+    if library.subject_count() == 0:
+        pytest.skip(NO_QUESTION_TO_NOTE)
+    library.get_subject_cards().first.click()
+    subject = SubjectPage(page)
+    subject.wait_for_loaded()
+
+    subject.open_chapter(0)
+    questions = SubjectQuestionsPage(page)
+    questions.wait_for_loaded()
+    chapter_url = page.url
+
+    for index in range(min(questions.question_count(), QUESTION_PROBE_LIMIT)):
+        if index:
+            page.goto(chapter_url, wait_until="domcontentloaded")
+            questions.wait_for_loaded()
+        questions.open_question(index)
+
+        question = SubjectQuestionPage(page)
+        question.wait_for_loaded()
+        if question.is_numeric_question():
+            continue
+
+        saved = question.add_note(NOTE_TEXT)
+        assert saved.status == 200, f"notes/add answered {saved.status}"
+        return
+
+    pytest.skip(NO_QUESTION_TO_NOTE)
+
 
 @pytest.fixture
-def page(login_as):
+def page(login_as, note_on_an_mcq):
     """Signed in once per session and replayed, instead of logging in per test."""
     return login_as(STUDENT_MOBILE)
 

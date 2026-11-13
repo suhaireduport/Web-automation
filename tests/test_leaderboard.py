@@ -43,6 +43,7 @@ from pages.leaderboard_page import (
     read_balance,
     read_coin_log,
 )
+from pages.question_library_section_page import normalise
 
 
 TABS = list(LeaderboardPage.TABS)
@@ -66,6 +67,7 @@ def page(login_as):
 def leaderboard(page):
     page.goto(LeaderboardPage.URL, wait_until="domcontentloaded")
     board = LeaderboardPage(page)
+    board.close_rating_prompt_whenever_shown()
     board.wait_for_loaded()
     return board
 
@@ -100,7 +102,9 @@ def shown_name(leaderboard, index, row):
     first name only, the list the whole one."""
     if leaderboard.is_podium_place(index):
         return podium_name(row["student"])
-    return row["student"].strip()
+    # A name can be served with a run of spaces in it, which the page renders
+    # as one.
+    return normalise(row["student"])
 
 
 # ---------------------------------------------------------------------------

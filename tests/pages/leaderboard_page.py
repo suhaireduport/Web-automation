@@ -316,6 +316,21 @@ class LeaderboardPage:
         self.get_rating_overlay().wait_for(state="detached")
         return True
 
+    def close_rating_prompt_whenever_shown(self):
+        """Have the rating prompt closed whenever it gets in the way.
+
+        The board raises it again on any tab the student ranks in the top tenth
+        of, so it can come up after a tab change as well as on arrival. A
+        locator handler closes it with its own button before any action it
+        would block, for the rest of this page's life."""
+        if getattr(self.page, "_closes_rating_prompt", False):
+            return
+        self.page.add_locator_handler(
+            self.get_rating_overlay(),
+            lambda overlay: self.get_rating_close_button().click(),
+        )
+        self.page._closes_rating_prompt = True
+
     # ---------- how to get coins ----------
 
     def get_info_button(self):
