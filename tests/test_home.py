@@ -5,19 +5,29 @@ from urllib.parse import unquote, unquote_plus
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import NON_PREMIUM_MOBILE, STUDENT_MOBILE
 from pages.home_page import HomePage
+from pages.leaderboard_page import call_api
 from pages.search_page import SEARCH_API, SearchPage, strip_number
-
-# A non-premium account: the Contact Us card is only offered to one, so it
-# cannot be checked on either of the students the rest of the suite signs in as.
-NON_PREMIUM_MOBILE = "5555555551"
 
 
 @pytest.fixture
 def page(login_as):
     """Signed in once per session and replayed, instead of logging in per test."""
     return login_as(STUDENT_MOBILE)
+
+
+def pass_birthday_wish(page):
+    """Get past the birthday wish to home, on an account whose birthday it is.
+
+    Home moves to the wish when the date of birth the home call serves falls on
+    today, so that date is read first, and the wish is only waited for and
+    left when it is the student's birthday. The wish itself is tested in the
+    birthday wish section at the end of this file."""
+    home_page = HomePage(page)
+    if home_page.is_birthday(call_api(page, "/home")["user"]["dob"]):
+        home_page.leave_birthday_wish()
+    return home_page
 
 
 def test_home_page(page):
@@ -236,7 +246,7 @@ def test_mini_player_close(page):
 def test_contact_us_card_for_non_premium_user(login_as):
     page = login_as(NON_PREMIUM_MOBILE)
 
-    home_page = HomePage(page)
+    home_page = pass_birthday_wish(page)
 
     contact_us_card = home_page.get_contact_us_card()
 
@@ -453,12 +463,12 @@ def open_search(page, home_page):
 
 def pick_query(body, kind):
     """Something the course actually carries to search for, and enough of its
-    title to search with."""
+    title to search with, as (item, query), or None when there is nothing."""
     for item in body.get(kind) or []:
         title = strip_number(item["title"])
         if len(title) >= 4:
             return item, title[:4]
-    return None, None
+    return None
 
 
 def test_the_search_button_opens_and_closes_the_search(page, home_page):
@@ -504,9 +514,10 @@ def test_typing_narrows_the_results_and_marks_what_matched(page, home_page):
     """What is typed keeps only the titles holding it, and marks the run of
     letters it matched on so it can be seen why each result is there."""
     sheet, body = open_search(page, home_page)
-    chapter, query = pick_query(body, "chapters")
-    if not chapter:
+    found = pick_query(body, "chapters")
+    if found is None:
         pytest.skip("the course carries no chapter to search for")
+    chapter, query = found
 
     sheet.search(query)
 
@@ -529,9 +540,10 @@ def test_a_search_result_opens_the_item_and_shuts_the_search(page, home_page):
     """A result is a way to the thing itself: it routes to the chapter it names
     and closes the sheet behind it."""
     sheet, body = open_search(page, home_page)
-    chapter, query = pick_query(body, "chapters")
-    if not chapter:
+    found = pick_query(body, "chapters")
+    if found is None:
         pytest.skip("the course carries no chapter to search for")
+    chapter, query = found
 
     sheet.search(query)
     row = sheet.get_results_tagged("Chapter").first
@@ -558,9 +570,10 @@ def test_the_search_filters_keep_one_kind_of_result(page, home_page):
     """The chips above the results are what the results are made of: choosing
     one leaves only that kind on screen."""
     sheet, body = open_search(page, home_page)
-    topic, query = pick_query(body, "topics")
-    if not topic:
+    found = pick_query(body, "topics")
+    if found is None:
         pytest.skip("the course carries no topic to search for")
+    topic, query = found
 
     sheet.search(query)
     assert sheet.get_active_filter() == "All"
@@ -621,9 +634,10 @@ def test_recent_searches_are_remembered_reused_and_removable(page, home_page):
     sheet = SearchPage(page)
     sheet.clear_stored_recents()
     _, body = open_search(page, home_page)
-    chapter, query = pick_query(body, "chapters")
-    if not chapter:
+    found = pick_query(body, "chapters")
+    if found is None:
         pytest.skip("the course carries no chapter to search for")
+    chapter, query = found
 
     sheet.search(query)
     expect(sheet.get_results().first).to_be_visible()
@@ -923,7 +937,7 @@ def test_the_unlock_cards_contact_button_opens_the_contact_sheet(login_as):
     """The card offered to an account that has never held a course has one
     thing on it to do, and it raises the same contact sheet Help does."""
     page = login_as(NON_PREMIUM_MOBILE)
-    home_page = HomePage(page)
+    home_page = pass_birthday_wish(page)
     home_page.wait_for_loaded()
 
     expect(home_page.get_unlock_button()).to_have_text("Contact Us")
@@ -1069,3 +1083,156 @@ def test_an_incomplete_profile_is_sent_back_to_signup(page):
     page.goto(HOME_URL, wait_until="domcontentloaded")
 
     expect(page).to_have_url(SIGNUP_URL)
+
+
+# ---------------------------------------------------------------------------
+# The birthday wish
+#
+# Home moves to /home/birthdayWish when the date of birth the home call serves
+# falls on today. The account's real date of birth decides it only once a
+# year, so most of these serve home with the date of birth moved to today (or
+# away from it), the way test_live_exam.py rewrites the exam feed. The last
+# test reads the real date of birth instead and holds home to it whichever
+# day it is.
+# ---------------------------------------------------------------------------
+
+HOME_API = re.compile(r"/api/v3/home(\?.*)?$")
+
+
+def serve_dob(page, dob):
+    """Serve the home call with the date of birth replaced, on this page only."""
+    def handler(route):
+        response = route.fetch()
+        body = response.json()
+        body["user"]["dob"] = dob
+        route.fulfill(response=response, json=body)
+
+    page.route(HOME_API, handler)
+
+
+def browser_today(page):
+    """Today by the browser's clock, which is the one the app goes by."""
+    year, month, day = page.evaluate(
+        "() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"
+    )
+    return datetime.date(year, month, day)
+
+
+def open_home_fresh(page):
+    """Open home with the wish not yet shown today and the question library
+    intro already seen, which is when home raises the wish."""
+    home_page = HomePage(page)
+    page.goto(HOME_URL, wait_until="domcontentloaded")
+    home_page.set_intro_seen(True)
+    home_page.forget_birthday_wishes()
+    page.goto(HOME_URL, wait_until="domcontentloaded")
+    return home_page
+
+
+def settle_home(page, home_page, shown):
+    """Wait until home has either moved to the wish again or come to rest,
+    so that a check made afterwards is not of a moment in between. shown is
+    the count of wishes read before whatever brought home up: the wish counts
+    itself as it opens, so a count above it means home raised it again."""
+    page.wait_for_function(
+        """([key, shown]) => {
+            let count = 0;
+            try { count = (JSON.parse(localStorage.getItem(key)) || {}).count || 0; } catch {}
+            return count > shown || (
+                !location.pathname.includes("birthdayWish")
+                && document.querySelector(".hp-subject-card, .hp-empty") !== null
+            );
+        }""",
+        arg=[home_page.WISH_COUNT_KEY, shown],
+        timeout=30000,
+    )
+    page.wait_for_load_state("networkidle")
+
+
+@pytest.fixture
+def birthday_wish(page):
+    """Home on a day served as the student's birthday."""
+    today = browser_today(page)
+    dob = call_api(page, "/home")["user"]["dob"]
+    year = int(dob.split("-")[0]) if dob else 2010
+    serve_dob(page, f"{year:04d}-{today.month:02d}-{today.day:02d}")
+
+    home_page = open_home_fresh(page)
+    expect(page).to_have_url(home_page.BIRTHDAY_WISH_URL, timeout=30000)
+    home_page.get_birthday_wish().wait_for()
+    return home_page
+
+
+def test_home_opens_the_birthday_wish_on_the_students_birthday(page, birthday_wish):
+    expect(page).to_have_url(birthday_wish.BIRTHDAY_WISH_URL)
+    expect(birthday_wish.get_birthday_wish()).to_be_visible()
+    expect(birthday_wish.get_birthday_wish_title()).to_have_attribute("alt", "Happy Birthday")
+
+
+def test_the_birthday_wish_names_the_student(page, birthday_wish):
+    """Written in capitals, from the name the home call serves."""
+    name = call_api(page, "/home")["user"]["name"]
+
+    expect(birthday_wish.get_birthday_wish_name()).to_have_text(" ".join(name.split()).upper())
+
+
+def test_the_birthday_wish_shows_the_students_avatar(birthday_wish):
+    expect(birthday_wish.get_birthday_wish_avatar()).to_be_visible()
+
+
+def test_the_birthday_wish_offers_share_and_back_to_study(birthday_wish):
+    expect(birthday_wish.get_birthday_wish_share()).to_have_text("Share")
+    expect(birthday_wish.get_birthday_wish_share()).to_be_enabled()
+    expect(birthday_wish.get_birthday_wish_back()).to_have_text("Back to study")
+    expect(birthday_wish.get_birthday_wish_back()).to_be_enabled()
+
+
+def test_the_birthday_wish_counts_itself_as_shown_today(birthday_wish):
+    assert birthday_wish.wishes_shown_today() == 1
+
+
+def test_back_to_study_returns_home_from_the_birthday_wish(page, birthday_wish):
+    """Back to study takes the student to home, and home stays there rather
+    than raising the wish over again."""
+    shown = birthday_wish.wishes_shown_today()
+    birthday_wish.get_birthday_wish_back().click()
+    settle_home(page, birthday_wish, shown)
+
+    expect(page).not_to_have_url(birthday_wish.BIRTHDAY_WISH_URL)
+    expect(birthday_wish.get_birthday_wish()).to_have_count(0)
+    expect(birthday_wish.get_subjects().first).to_be_visible()
+
+
+def test_no_birthday_wish_on_any_other_day(page):
+    """Home stays home when the date of birth is not today."""
+    today = browser_today(page)
+    other_month = today.month % 12 + 1
+    serve_dob(page, f"2010-{other_month:02d}-{today.day if today.day <= 28 else 28:02d}")
+
+    home_page = open_home_fresh(page)
+    settle_home(page, home_page, 0)
+
+    expect(page).not_to_have_url(home_page.BIRTHDAY_WISH_URL)
+    expect(home_page.get_birthday_wish()).to_have_count(0)
+    assert home_page.wishes_shown_today() == 0
+
+
+@pytest.mark.parametrize("mobile", [STUDENT_MOBILE, NON_PREMIUM_MOBILE])
+def test_the_birthday_wish_follows_the_dob_in_the_home_api(login_as, mobile):
+    """Unrouted: the account's real date of birth, read from the home call,
+    decides whether home raises the wish today."""
+    page = login_as(mobile)
+    home_page = open_home_fresh(page)
+    user = call_api(page, "/home")["user"]
+
+    if home_page.is_birthday(user["dob"]):
+        expect(page).to_have_url(home_page.BIRTHDAY_WISH_URL, timeout=30000)
+        expect(home_page.get_birthday_wish_name()).to_have_text(
+            " ".join(user["name"].split()).upper()
+        )
+    else:
+        settle_home(page, home_page, 0)
+        expect(page).not_to_have_url(home_page.BIRTHDAY_WISH_URL)
+        expect(home_page.get_birthday_wish()).to_have_count(0)
+
+    print(mobile, "dob", user["dob"], "-> wish" if home_page.is_birthday(user["dob"]) else "-> home")

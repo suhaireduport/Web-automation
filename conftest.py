@@ -34,11 +34,15 @@ DEFAULT_OTP = "4305"
 # test_practice_questions.py (spend practice questions). Nothing else should
 # use it.
 #
-# Numbers belonging to a single test - a throwaway for a fresh signup, an
-# account in a particular subscription state, a string being fed to the login
-# box to check what it accepts - stay in the test that needs them.
-STUDENT_MOBILE = "9037929697"
+# NON_PREMIUM_MOBILE is an account with a course but no subscription, for the
+# screens only a non-premium student is shown (the Contact Us card on Home).
+#
+# Numbers belonging to a single test - a throwaway for a fresh signup, a
+# string being fed to the login box to check what it accepts - stay in the
+# test that needs them.
+STUDENT_MOBILE = "8893963137"
 SECOND_STUDENT_MOBILE = "9037929697"
+NON_PREMIUM_MOBILE = "9999944444"
 
 # Headless by default because it is much faster. Run with HEADED=1 to watch.
 HEADLESS = os.getenv("HEADED", "").lower() not in ("1", "true", "yes")

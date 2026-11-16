@@ -1,5 +1,7 @@
 import re
 
+from playwright.sync_api import expect
+
 
 class HomePage:
     def __init__(self,page):
@@ -268,6 +270,104 @@ class HomePage:
 
     def get_birthday_change(self):
         return self.page.locator(".hp-bday-change")
+
+    # ---------- the birthday wish ----------
+    #
+    # A page of its own that home moves to when the date of birth the home call
+    # serves falls on today. Home raises it only once the question library
+    # intro has been seen, and at most WISHES_PER_DAY times a day: every time
+    # the page opens it counts itself in localStorage under WISH_COUNT_KEY, as
+    # {"date": "2026-11-16", "count": 1}, with the date written unpadded.
+
+    BIRTHDAY_WISH_URL = re.compile(r"/home/birthdayWish")
+    WISH_COUNT_KEY = "show_birthday_wish"
+    WISHES_PER_DAY = 2
+
+    def get_birthday_wish(self):
+        return self.page.locator(".bw-page")
+
+    def get_birthday_wish_title(self):
+        return self.page.locator(".bw-title-img")
+
+    def get_birthday_wish_avatar(self):
+        return self.page.locator(".bw-avatar")
+
+    def get_birthday_wish_name(self):
+        return self.page.locator(".bw-name")
+
+    def get_birthday_wish_share(self):
+        return self.page.locator(".bw-share")
+
+    def get_birthday_wish_back(self):
+        return self.page.locator(".bw-back")
+
+    def is_birthday(self, dob):
+        """Whether a "YYYY-MM-DD" date of birth falls on today, by the
+        browser's own clock, which is the one the app goes by."""
+        return self.page.evaluate(
+            """dob => {
+                const [, month, day] = (dob || "").split("-").map(Number);
+                const now = new Date();
+                return now.getMonth() + 1 === month && now.getDate() === day;
+            }""",
+            dob,
+        )
+
+    def wishes_shown_today(self):
+        """How many times the wish has opened today in this browser."""
+        return self.page.evaluate(
+            """key => {
+                const now = new Date();
+                const today = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+                try {
+                    const seen = JSON.parse(localStorage.getItem(key));
+                    return seen && seen.date === today ? seen.count ?? 0 : 0;
+                } catch {
+                    return 0;
+                }
+            }""",
+            self.WISH_COUNT_KEY,
+        )
+
+    def forget_birthday_wishes(self):
+        """Clear the count, so home raises the wish again on a birthday."""
+        self.page.evaluate("key => localStorage.removeItem(key)", self.WISH_COUNT_KEY)
+
+    def wait_for_another_wish(self, shown):
+        """Wait for the wish to open again: it counts itself as it opens."""
+        self.page.wait_for_function(
+            """([key, shown]) => {
+                try {
+                    return (JSON.parse(localStorage.getItem(key)) || {}).count > shown;
+                } catch {
+                    return false;
+                }
+            }""",
+            arg=[self.WISH_COUNT_KEY, shown],
+        )
+
+    def leave_birthday_wish(self):
+        """Back to study for as long as home keeps raising the wish, then wait
+        for home.
+
+        Only for an account whose birthday it is. Home raises the wish again
+        on the way back while it has been shown fewer than WISHES_PER_DAY times
+        today, so Back to study can take more than one tap."""
+        while True:
+            if self.wishes_shown_today() < self.WISHES_PER_DAY:
+                expect(self.page).to_have_url(self.BIRTHDAY_WISH_URL, timeout=30000)
+                self.get_birthday_wish().wait_for()
+            elif not self.BIRTHDAY_WISH_URL.search(self.page.url):
+                break
+
+            shown = self.wishes_shown_today()
+            self.get_birthday_wish_back().click()
+            if shown >= self.WISHES_PER_DAY:
+                break
+            self.wait_for_another_wish(shown)
+
+        expect(self.page).not_to_have_url(self.BIRTHDAY_WISH_URL)
+        self.wait_for_loaded()
 
     # ---------- section navigation ----------
     #

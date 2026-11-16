@@ -599,16 +599,24 @@ class SectionQuestionPage:
         return self.page.get_by_role("button", name="Send Report")
 
 
+# A word search can find as typed: letters and digits, and at most one
+# punctuation mark after them.
+PLAIN_WORD = re.compile(r"[A-Za-z0-9]+[.,;:?!]?")
+
+
 def searchable_snippet(text, limit=4):
     """A chunk of the question that is safe to type into search.
 
     Search comes back empty for text with characters outside ASCII - one
-    typographic apostrophe or maths glyph is enough - so the snippet is drawn
-    from the longest run of plain words the question offers, keeping the words
-    contiguous so a substring match still holds."""
+    typographic apostrophe or maths glyph is enough - and for maths written in
+    ASCII as well, such as "=y},": the question is stored as markup, so what the
+    screen renders from it is not the text search looks through. So the snippet
+    is drawn from the longest run of plain words - letters and digits, with at
+    most a trailing punctuation mark - keeping the words contiguous so a
+    substring match still holds."""
     runs, run = [], []
     for word in normalise(text).split():
-        if word.isascii():
+        if PLAIN_WORD.fullmatch(word):
             run.append(word)
         elif run:
             runs.append(run)

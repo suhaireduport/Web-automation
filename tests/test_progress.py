@@ -100,6 +100,10 @@ DURATION_MARGIN = 1.5
 # How much video a single test will sit through to watch a chapter out in full.
 CHAPTER_COMPLETION_LIMIT = 20
 
+# How many videos the run will finish to leave a topic watched out with its
+# quiz still owed, when no chapter already holds one.
+OWING_QUIZ_VIDEO_LIMIT = 6
+
 
 @pytest.fixture
 def page(login_as):
@@ -169,6 +173,10 @@ def content_survey(login_session):
                 "quiz_free": all(
                     topic_quizzes_are_done(topic) for topic in body["topics"]
                 ),
+                "owing_quiz": sum(
+                    1 for topic in body["topics"] if topic_owes_only_its_quiz(topic)
+                ),
+                "owing_candidate": quiz_owing_topic_to_watch_out(body),
             })
 
             chapters.open(subject_url)
@@ -331,6 +339,93 @@ def mixed_topic_page(page, home_page, mixed_content):
     return topics
 
 
+@pytest.fixture(scope="session")
+def owing_quiz_content(login_session, content_survey):
+    """A chapter holding a topic whose video has all been watched while its
+    quiz is still outstanding.
+
+    The state is read from whichever chapter already holds it. When none does,
+    it is made the way a student would come to it: the quiz-owing topic with
+    the fewest videos left is watched out, and its quiz is left alone. The quiz
+    is never taken by any test, so the topic stays in that state and later runs
+    find it without watching anything."""
+    ready = [row for row in content_survey if row["owing_quiz"]]
+    if ready:
+        return ready[0]
+
+    candidates = [row for row in content_survey if row["owing_candidate"]]
+    if not candidates:
+        pytest.skip("No topic in the surveyed chapters owes a quiz")
+    row = min(
+        candidates,
+        key=lambda found: (
+            found["owing_candidate"]["outstanding"],
+            found["owing_candidate"]["seconds"],
+        ),
+    )
+    topic_index = row["owing_candidate"]["topic"]
+    if row["owing_candidate"]["outstanding"] > OWING_QUIZ_VIDEO_LIMIT:
+        pytest.skip(
+            "Every quiz-owing topic has more than "
+            f"{OWING_QUIZ_VIDEO_LIMIT} videos left to watch out"
+        )
+
+    page = login_session(STUDENT_MOBILE)
+    page.goto(HOME_URL, wait_until="domcontentloaded")
+    home = HomePage(page)
+    home.get_subjects().first.wait_for()
+    home.open_subject(row["subject"])
+
+    chapters = ChapterPage(page)
+    chapters.wait_for_chapters_loaded()
+    chapters.click_chapter(row["chapter"])
+
+    topics = TopicPage(page)
+    topics.wait_for_topics_loaded()
+    topics.expand_all_topics()
+    syllabus = reload_syllabus(page, topics)
+
+    outstanding = [
+        flat_index
+        for flat_index, (owner, _, subtopic) in enumerate(flat_subtopics(syllabus))
+        if owner == topic_index and not subtopic["video_completed"]
+    ]
+    print(
+        f"Watching out {syllabus['topics'][topic_index]['title']!r} in "
+        f"{row['subject_title']!r} {row['title']!r}: {len(outstanding)} videos, "
+        "quiz left outstanding"
+    )
+    for flat_index in outstanding:
+        player = open_player(page, topics, flat_index)
+        finish_video(page, player)
+        player.click_back()
+        topics.wait_for_topics_loaded()
+        topics.expand_all_topics()
+
+    syllabus = reload_syllabus(page, topics)
+    assert topic_owes_only_its_quiz(syllabus["topics"][topic_index]), (
+        "the topic was watched out but does not read as owing only its quiz: "
+        f"{syllabus['topics'][topic_index]}"
+    )
+    return row
+
+
+@pytest.fixture
+def owing_topic_page(page, home_page, owing_quiz_content):
+    """The topic list of the chapter holding a watched out topic that still
+    owes its quiz, with every topic opened."""
+    home_page.open_subject(owing_quiz_content["subject"])
+
+    chapters = ChapterPage(page)
+    chapters.wait_for_chapters_loaded()
+    chapters.click_chapter(owing_quiz_content["chapter"])
+
+    topics = TopicPage(page)
+    topics.wait_for_topics_loaded()
+    topics.expand_all_topics()
+    return topics
+
+
 # ---------------------------------------------------------------------------
 # Reading the syllabus
 #
@@ -391,6 +486,38 @@ def topic_can_be_finished_by_watching(topic):
     return bool(topic["subtopics"]) and topic_quizzes_are_done(topic)
 
 
+def topic_owes_only_its_quiz(topic):
+    """Every subtopic watched out, and a quiz still outstanding."""
+    return (
+        bool(topic["subtopics"])
+        and all(subtopic["video_completed"] for subtopic in topic["subtopics"])
+        and not topic_quizzes_are_done(topic)
+    )
+
+
+def quiz_owing_topic_to_watch_out(syllabus):
+    """The topic still owing a quiz that takes the fewest videos to watch out,
+    as {"topic": position, "outstanding": videos left}, or None.
+
+    Only topics whose every unwatched subtopic has a video are considered: a
+    subtopic with nothing to play cannot be watched out."""
+    candidates = []
+    for index, topic in enumerate(syllabus["topics"]):
+        if not topic["subtopics"] or topic_quizzes_are_done(topic):
+            continue
+        left = [s for s in topic["subtopics"] if not s["video_completed"]]
+        if not left or any(s["video_duration"] <= 0 for s in left):
+            continue
+        candidates.append({
+            "topic": index,
+            "outstanding": len(left),
+            "seconds": sum(s["video_duration"] - s["watched_duration"] for s in left),
+        })
+    if not candidates:
+        return None
+    return min(candidates, key=lambda found: (found["outstanding"], found["seconds"]))
+
+
 def finished_topic_count(syllabus):
     return sum(1 for topic in syllabus["topics"] if topic_is_finished(topic))
 
@@ -401,7 +528,9 @@ def pick_subtopic(syllabus, below=100.0, in_topic_of_at_least=1):
     Nothing resets progress and the mark only moves forward, so a test that
     drives a subtopic to a position has to start from one that has not already
     passed it. The shortest is taken because the video still has to be played
-    through the point it is seeked to."""
+    through the point it is seeked to.
+
+    Hands back (position, subtopic), or None when nothing qualifies."""
     candidates = [
         (index, subtopic)
         for index, (_, topic, subtopic) in enumerate(flat_subtopics(syllabus))
@@ -410,7 +539,7 @@ def pick_subtopic(syllabus, below=100.0, in_topic_of_at_least=1):
         and len(topic["subtopics"]) >= in_topic_of_at_least
     ]
     if not candidates:
-        return None, None
+        return None
     return min(candidates, key=lambda found: found[1]["video_duration"])
 
 
@@ -547,9 +676,10 @@ def test_watching_half_a_video_fills_half_the_ring(page, topic_page):
     """The ring is the watched fraction of the video and nothing else, so a
     video stopped half way shows about half a ring."""
     syllabus = reload_syllabus(page, topic_page)
-    index, subtopic = pick_subtopic(syllabus, below=50 - PICK_MARGIN)
-    if index is None:
+    found = pick_subtopic(syllabus, below=50 - PICK_MARGIN)
+    if found is None:
         pytest.skip("No subtopic left that is under half watched")
+    index, subtopic = found
 
     posted = watch_and_record(page, topic_page, index, 0.5, subtopic)
 
@@ -573,9 +703,10 @@ def test_watching_half_a_video_fills_half_the_ring(page, topic_page):
 
 def test_finishing_a_video_takes_the_subtopic_to_100(page, topic_page):
     syllabus = reload_syllabus(page, topic_page)
-    index, subtopic = pick_subtopic(syllabus)
-    if index is None:
+    found = pick_subtopic(syllabus)
+    if found is None:
         pytest.skip("Every subtopic in this chapter is already finished")
+    index, subtopic = found
 
     player = open_player(page, topic_page, index)
     posted = finish_video(page, player)
@@ -622,9 +753,10 @@ def test_progress_is_kept_when_a_subtopic_is_left_and_reopened(page, topic_page)
     """Stop part way, leave, come back: the ring still shows the recorded
     position and the player picks the video up there rather than at nought."""
     syllabus = reload_syllabus(page, topic_page)
-    index, subtopic = pick_subtopic(syllabus, below=35 - PICK_MARGIN)
-    if index is None:
+    found = pick_subtopic(syllabus, below=35 - PICK_MARGIN)
+    if found is None:
         pytest.skip("No subtopic left that is under a third watched")
+    index, subtopic = found
 
     left_at = watch_and_record(page, topic_page, index, 0.35, subtopic)["progress"]
 
@@ -648,9 +780,10 @@ def test_resuming_a_subtopic_carries_its_progress_on(page, topic_page):
     """Coming back and watching further moves the ring on from where it was
     rather than starting it again."""
     syllabus = reload_syllabus(page, topic_page)
-    index, subtopic = pick_subtopic(syllabus, below=55 - PICK_MARGIN)
-    if index is None:
+    found = pick_subtopic(syllabus, below=55 - PICK_MARGIN)
+    if found is None:
         pytest.skip("No subtopic left that is under half watched")
+    index, subtopic = found
 
     left_at = watch_and_record(page, topic_page, index, 0.55, subtopic)["progress"]
 
@@ -736,9 +869,10 @@ def test_pausing_a_video_records_nothing_and_loses_nothing(page, topic_page):
     again, and it is still there when the player is finally left - which is the
     one moment it is sent."""
     syllabus = reload_syllabus(page, topic_page)
-    index, subtopic = pick_subtopic(syllabus, below=45 - PICK_MARGIN)
-    if index is None:
+    found = pick_subtopic(syllabus, below=45 - PICK_MARGIN)
+    if found is None:
         pytest.skip("No subtopic left that is under 45% watched")
+    index, subtopic = found
 
     player = open_player(page, topic_page, index)
     paused_at = player.watch_up_to(0.35)
@@ -913,18 +1047,17 @@ def test_a_finished_topic_shows_a_tick_on_its_number(page, topic_page):
 
 
 def test_watching_all_the_video_does_not_finish_a_topic_that_still_owes_a_quiz(
-    page, topic_page
+    page, owing_topic_page
 ):
     """A topic whose video has all been watched but whose quiz is outstanding
     stays unticked and goes on counting for nothing towards its chapter."""
+    topic_page = owing_topic_page
     syllabus = reload_syllabus(page, topic_page)
 
     owing = [
         index
         for index, topic in enumerate(syllabus["topics"])
-        if topic["subtopics"]
-        and all(subtopic["video_completed"] for subtopic in topic["subtopics"])
-        and not topic_quizzes_are_done(topic)
+        if topic_owes_only_its_quiz(topic)
     ]
     if not owing:
         pytest.skip("No topic here has all its video watched and a quiz outstanding")
@@ -997,11 +1130,12 @@ def test_a_part_watched_subtopic_does_not_finish_its_topic(page, topic_page):
     """One subtopic taken to half leaves its topic unfinished while every other
     subtopic under it is still outstanding."""
     syllabus = reload_syllabus(page, topic_page)
-    index, subtopic = pick_subtopic(
+    found = pick_subtopic(
         syllabus, below=50 - PICK_MARGIN, in_topic_of_at_least=2
     )
-    if index is None:
+    if found is None:
         pytest.skip("No under-watched subtopic in a topic that holds several")
+    index, subtopic = found
 
     topic_index = flat_subtopics(syllabus)[index][0]
 
