@@ -138,6 +138,9 @@ def test_video_player_reopens_the_same_video_from_the_mini_player(page, video_pa
 
     page.wait_for_url(PLAYER_URL_PATTERN)
     video_page.wait_for_player_loaded()
+    # The player opens at 0 and the app moves it to the saved position a
+    # moment later, so the position is read once that has happened.
+    video_page.wait_for_restore(left_at - RESUME_TOLERANCE)
 
     expect(page).to_have_url(PLAYER_URL_PATTERN)
     assert video_page.get_video_title().inner_text() == title
@@ -320,26 +323,43 @@ def test_reopening_a_video_resumes_where_it_was_left(page, video_page):
 # 6. Seeking
 # ---------------------------------------------------------------------------
 
+# Where the seeking tests jump to: 150s into the video, or short of its end on
+# a video that is not that long. Which video the course opens on changes with
+# the course, and seeking past the end lands on the end instead.
+LATE_MARK = 150
+END_MARGIN = 10
+
+
+def late_mark(video_page):
+    return min(LATE_MARK, video_page.get_duration() - END_MARGIN)
+
+
 def test_seeking_forward_moves_playback_on(video_page):
     """Absolute marks, not an offset: the video reopens wherever it was last
     left, so a relative jump could land past the end."""
-    video_page.seek_to(30)
+    late = late_mark(video_page)
+    early = min(30, late / 4)
+
+    video_page.seek_to(early)
     video_page.page.wait_for_timeout(1500)
 
-    video_page.seek_to(150)
+    video_page.seek_to(late)
     video_page.page.wait_for_timeout(1500)
 
-    assert video_page.get_current_time() > 140
+    assert video_page.get_current_time() > late - 10
 
 
 def test_seeking_backward_moves_playback_back(video_page):
-    video_page.seek_to(150)
+    late = late_mark(video_page)
+    early = min(20, late / 4)
+
+    video_page.seek_to(late)
     video_page.page.wait_for_timeout(1500)
 
-    video_page.seek_to(20)
+    video_page.seek_to(early)
     video_page.page.wait_for_timeout(1500)
 
-    assert video_page.get_current_time() < 40
+    assert video_page.get_current_time() < early + 20
 
 
 def test_playback_carries_on_after_seeking(video_page):

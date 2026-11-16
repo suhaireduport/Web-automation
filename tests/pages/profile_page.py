@@ -16,10 +16,10 @@ class ProfilePage:
     Help Center is a hosted form in an iframe, and WhatsApp and Contact Us both
     open the same contact sheet. Call My Mentor dials rather than navigating.
 
-    Edit Details (/profile/edit) used to be reached from here through the pencil
-    on the avatar (get_avatar_edit). As of 2026-11 that pencil opens a "Change
-    Profile" avatar picker instead, and nothing on this page links to
-    /profile/edit; the route itself still works when loaded by URL.
+    The pencil on the avatar (get_avatar_edit) opens a "Change Profile" avatar
+    picker, which is only for choosing the picture. The account itself is
+    edited through the My Account card. Edit Details (/profile/edit) is not
+    linked from this page; the route still works when loaded by URL.
     """
 
     URL = "https://eduport-react.pages.dev/profile"
@@ -76,12 +76,23 @@ class ProfilePage:
     def get_avatar_edit(self):
         return self.page.locator(".pp-avatar-edit")
 
-    def open_edit_details(self):
-        """Click the avatar pencil, the way Edit Details used to be opened.
+    # ---------- avatar picker ----------
+    #
+    # The pencil on the avatar raises this sheet over the page: a carousel of
+    # the app's preset avatars, or a photo from the gallery, and SET PROFILE.
 
-        Kept as the user's path rather than a goto, so tests that call it
-        report whether that path still leads to /profile/edit."""
+    def open_avatar_picker(self):
         self.get_avatar_edit().click()
+        self.get_avatar_picker().wait_for()
+
+    def get_avatar_picker(self):
+        return self.page.locator(".aps-sheet")
+
+    def get_avatar_picker_title(self):
+        return self.page.locator(".aps-title")
+
+    def get_avatar_picker_set_button(self):
+        return self.page.locator(".aps-set-btn")
 
     def get_share_button(self):
         return self.page.locator(".pp-share")
@@ -345,3 +356,29 @@ class ProfilePage:
 
     def get_contact_option_labels(self):
         return [t.strip() for t in self.page.locator(".cu-option-label").all_inner_texts()]
+
+
+# The avatar the app falls back to, by gender, when an uploaded photo will not
+# load.
+GENDER_DEFAULT_AVATARS = {"male": "ga-jay", "female": "ga-tara"}
+
+
+def shown_avatar_src(avatar_key, avatar, gender=None):
+    """What an avatar img is drawn from, given the avatar key, URL and gender
+    the API serves for the student.
+
+    A preset avatar - one picked from the app's own avatar sets, which the API
+    names by key - is drawn from the copy bundled with the app, served as
+    /assets/<key>-<hash>.png, rather than from the URL the API carries
+    alongside it. Anything else is drawn from that URL, and where that photo
+    will not load (uploaded photos on dev answer 403) the Profile page swaps in
+    the bundled default for the student's gender, which is how the app is
+    meant to cope."""
+    if avatar_key:
+        return re.compile(
+            r"(/assets/" + re.escape(avatar_key) + r"-[^/]+|" + re.escape(avatar or "") + r")$"
+        )
+    fallback = GENDER_DEFAULT_AVATARS.get((gender or "").strip().lower(), "ga-jay")
+    return re.compile(
+        r"(" + re.escape(avatar or "") + r"|/assets/" + re.escape(fallback) + r"-[^/]+)$"
+    )

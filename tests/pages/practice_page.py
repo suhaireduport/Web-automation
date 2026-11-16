@@ -105,11 +105,15 @@ class AddTopicsPage:
     def get_topic(self, chapter_index, topic_index):
         return self.get_topics(chapter_index).nth(topic_index)
 
+    # The topic rows are divs acting as buttons, so a topic that cannot be
+    # picked carries aria-disabled="true" rather than a disabled attribute.
+    PRACTICABLE_TOPIC = ".atp-topic[aria-disabled='false']"
+
     def get_practicable_topics(self, chapter_index=None):
         """A topic whose questions have all been answered is served disabled."""
         if chapter_index is None:
-            return self.page.locator(".atp-topic:not([disabled])")
-        return self.get_chapter(chapter_index).locator(".atp-topic:not([disabled])")
+            return self.page.locator(self.PRACTICABLE_TOPIC)
+        return self.get_chapter(chapter_index).locator(self.PRACTICABLE_TOPIC)
 
     def get_topic_title(self, chapter_index, topic_index):
         return self.get_topic(chapter_index, topic_index).locator(".atp-topic-title")

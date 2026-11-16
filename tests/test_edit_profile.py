@@ -95,10 +95,10 @@ def current_profile(home_page):
 def edit_page(home_page, current_profile):
     """Edit Details, entered with the Profile page behind it.
 
-    The pencil on the Profile avatar used to route here, but as of 2026-11 it
-    opens an avatar picker instead, and nothing on the Profile page links to
-    /profile/edit any more. Whether the page can still be reached from Profile
-    is checked on its own by test_edit_details_page_opens_from_the_profile_menu.
+    The pencil on the Profile avatar opens an avatar picker, and the account
+    is edited from the Profile page through My Account (see
+    test_the_profile_page_edits_the_account_through_my_account), so nothing on
+    the Profile page links to /profile/edit.
 
     So the Profile page is opened the way a user reaches it and the edit page
     is then loaded by its URL. Save goes back to the previous page in the
@@ -141,28 +141,30 @@ def restore_profile(home_page, current_profile):
 
 
 # ---------------------------------------------------------------------------
-# Scenario:   Edit Details opens from the profile menu
+# Scenario:   the account is edited from the profile menu
 # Pre:        signed in, on the home page
-# Steps:      open the Profile page from the avatar, click the pencil on it
-# Expected:   /profile/edit with its heading, form and Save button
+# Steps:      open the Profile page from the avatar, click My Account
+# Expected:   the My Account sheet over Profile, holding the saved name ready to
+#             change, with Save
 #
-# Drives the path itself rather than taking the edit_page fixture, which loads
-# the page by URL. As of 2026-11 the pencil opens a "Change Profile" avatar
-# picker instead, so this fails until Edit Details is reachable from Profile
-# again (or the expected path is changed to whatever replaces it).
+# The pencil on the avatar only changes the picture (it opens an avatar
+# picker), so My Account is the way into editing the account from Profile.
+# What the sheet saves is covered in test_profile.py, section 11.
 # ---------------------------------------------------------------------------
 
-def test_edit_details_page_opens_from_the_profile_menu(page, home_page):
+def test_the_profile_page_edits_the_account_through_my_account(
+    page, home_page, current_profile
+):
     home_page.open_profile_menu()
     profile_page = ProfilePage(page)
     profile_page.wait_for_loaded()
-    profile_page.open_edit_details()
+    profile_page.open_my_account()
 
-    edit_page = EditProfilePage(page)
-    expect(page).to_have_url(EDIT_PROFILE_URL)
-    expect(edit_page.get_title()).to_have_text("Edit Details")
-    expect(edit_page.get_form()).to_be_visible()
-    expect(edit_page.get_save_button()).to_be_enabled()
+    expect(page).to_have_url(PROFILE_URL)
+    expect(profile_page.get_account_title()).to_have_text("My Account")
+    expect(profile_page.get_account_name_input()).to_be_editable()
+    assert profile_page.get_account_name().split() == current_profile["name"].split()
+    expect(profile_page.get_account_save()).to_be_visible()
 
 
 # ---------------------------------------------------------------------------

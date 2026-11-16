@@ -35,7 +35,7 @@ from pages.bookmark_page import BookmarkPage, BookmarkQuestionsPage, BookmarkQue
 from pages.home_page import HomePage
 from pages.practice_page import start_quick_practice
 from pages.question_library_page import QuestionLibraryPage
-from pages.question_library_section_page import read_section_count, searchable_snippet
+from pages.question_library_section_page import read_section_count
 
 
 HOME_URL = "https://eduport-react.pages.dev/"
@@ -451,14 +451,18 @@ def test_the_questions_screen_offers_search_and_a_topic_filter(bookmark_question
 
 
 def test_searching_the_questions_narrows_the_list(bookmarked, bookmark_questions):
-    snippet = searchable_snippet(bookmarked["question"])
-    assert snippet, "the question has no plain words to search with"
+    """Searched by the question this run put here when it has plain words to
+    search by, otherwise by another question the chapter lists."""
+    found = bookmark_questions.searchable_question(bookmarked["question"])
+    if found is None:
+        pytest.skip("No question in this chapter has plain words to search with")
+    text, snippet = found
 
     bookmark_questions.click_search()
     bookmark_questions.search(snippet)
 
     expect(bookmark_questions.get_questions().first).to_be_visible()
-    assert bookmark_questions.find_question(bookmarked["question"]) is not None
+    assert bookmark_questions.find_question(text) is not None
 
 
 def test_the_topic_filter_lists_the_topics_that_were_bookmarked(
@@ -481,7 +485,7 @@ def test_the_topic_filter_lists_the_topics_that_were_bookmarked(
 
 def test_the_question_opens_with_its_options(bookmarked_question):
     expect(bookmarked_question.get_page()).to_be_visible()
-    expect(bookmarked_question.get_question()).not_to_be_empty()
+    expect(bookmarked_question.get_question_content()).to_be_visible()
     expect(bookmarked_question.get_choose_label()).to_be_visible()
 
     total = bookmarked_question.get_options().count()

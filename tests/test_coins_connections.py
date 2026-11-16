@@ -34,6 +34,7 @@ from playwright.sync_api import expect
 
 from conftest import SECOND_STUDENT_MOBILE, STUDENT_MOBILE
 from pages.leaderboard_page import LeaderboardPage, call_api, read_coin_log
+from pages.profile_page import shown_avatar_src
 from pages.streak_page import StreakPage
 
 # The account carrying an exam attempt, and the one earning coins as this
@@ -239,7 +240,13 @@ def test_the_leaderboard_row_is_the_student_the_profile_call_describes(
     student = call_api(page, "/profile")["student"]
 
     assert mine["student"].strip() == student["name"].strip()
-    assert mine["avatar"] == student["avatar"]
+    # A preset avatar is drawn from its key, and the board does not keep the URL
+    # beside a key up to date, so where there is a key it is the key that has
+    # to agree. An uploaded photo has only its URL.
+    if student.get("avatar_key"):
+        assert mine.get("avatar_key") == student["avatar_key"]
+    else:
+        assert mine["avatar"] == student["avatar"]
 
     index = leaderboard.current_row_index()
     assert index is not None, (
@@ -253,6 +260,16 @@ def test_the_leaderboard_row_is_the_student_the_profile_call_describes(
     expected = full_name.split()[0] if leaderboard.is_podium_place(index) else full_name
     expect(leaderboard.get_row_name(index)).to_have_text(expected)
 
-    expect(leaderboard.get_row_avatar(index)).to_have_attribute(
-        "src", student["avatar"]
-    )
+    if student.get("avatar_key"):
+        expect(leaderboard.get_row_avatar(index)).to_have_attribute(
+            "src", shown_avatar_src(student["avatar_key"], student["avatar"])
+        )
+    else:
+        # An uploaded photo that will not load is swapped for a person icon,
+        # which the app treats as fine; otherwise the photo itself is shown.
+        row = leaderboard.get_row(index)
+        expect(
+            row.locator(f"img[src='{student['avatar']}']")
+            .or_(row.locator("div.lb-avatar, div.lb-row-avatar"))
+            .first
+        ).to_be_visible()

@@ -318,7 +318,7 @@ def test_filter_offers_the_chapter_topics(note_questions):
 
 def test_opening_a_question_shows_it_in_full(note_question):
     expect(note_question.get_page()).to_be_visible()
-    expect(note_question.get_question()).not_to_be_empty()
+    expect(note_question.get_question_content()).to_be_visible()
     expect(note_question.get_choose_label()).to_be_visible()
 
     assert note_question.get_options().count() >= 2

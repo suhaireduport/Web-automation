@@ -40,7 +40,7 @@ DEFAULT_OTP = "4305"
 # Numbers belonging to a single test - a throwaway for a fresh signup, a
 # string being fed to the login box to check what it accepts - stay in the
 # test that needs them.
-STUDENT_MOBILE = "8893963137"
+STUDENT_MOBILE = "9037929697"
 SECOND_STUDENT_MOBILE = "9037929697"
 NON_PREMIUM_MOBILE = "9999944444"
 

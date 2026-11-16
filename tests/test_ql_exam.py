@@ -553,7 +553,7 @@ def test_clearing_the_exam_filter_brings_every_question_back(
 def test_the_question_opens_with_its_options(page, exam_question):
     expect(page).to_have_url(ExamQuestionPage.URL_PATTERN)
     expect(exam_question.get_page()).to_be_visible()
-    expect(exam_question.get_question()).not_to_be_empty()
+    expect(exam_question.get_question_content()).to_be_visible()
     expect(exam_question.get_choose_label()).to_be_visible()
 
     total = exam_question.get_options().count()

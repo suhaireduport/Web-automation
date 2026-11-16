@@ -348,6 +348,22 @@ class SectionQuestionsPage:
         """A question can be a picture with no text at all."""
         return self.get_question_text(index).locator("img")
 
+    def searchable_question(self, preferred=None):
+        """A question on this list to search for, as (text, snippet): the
+        preferred one when it has plain words to search by, otherwise the first
+        listed question that does. None when no question here has any - one
+        written wholly in maths or as a picture cannot be typed into search."""
+        candidates = [preferred] if preferred else []
+        candidates += [
+            self.get_question_text(index).inner_text()
+            for index in range(self.question_count())
+        ]
+        for text in candidates:
+            snippet = searchable_snippet(text)
+            if snippet:
+                return text, snippet
+        return None
+
     def get_question_texts(self):
         return [normalise(text) for text in self.get_questions().all_inner_texts()]
 
@@ -444,6 +460,14 @@ class SectionQuestionPage:
 
     def get_question_text(self):
         return normalise(self.get_question().inner_text())
+
+    def get_question_content(self):
+        """The question, once it shows something: text, or a picture - a
+        question can be an image with no text at all."""
+        question = self.get_question()
+        return question.filter(has_text=re.compile(r"\S")).or_(
+            question.filter(has=self.page.locator("img"))
+        )
 
     def get_choose_label(self):
         return self.page.locator(".qlr-choose")

@@ -407,7 +407,7 @@ def test_the_topic_filter_lists_the_topics_of_the_chapter(chapter_questions):
 
 def test_the_question_opens_with_its_options(subject_question):
     expect(subject_question.get_page()).to_be_visible()
-    expect(subject_question.get_question()).not_to_be_empty()
+    expect(subject_question.get_question_content()).to_be_visible()
     expect(subject_question.get_choose_label()).to_be_visible()
 
     total = subject_question.get_options().count()

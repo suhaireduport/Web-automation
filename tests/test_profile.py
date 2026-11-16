@@ -37,7 +37,7 @@ from playwright.sync_api import expect
 from conftest import STUDENT_MOBILE
 from pages.edit_profile_page import EditProfilePage
 from pages.home_page import HomePage
-from pages.profile_page import ProfilePage
+from pages.profile_page import ProfilePage, shown_avatar_src
 from pages.leaderboard_page import call_api, read_balance
 
 
@@ -198,10 +198,16 @@ def test_the_profile_reads_the_same_after_a_reload(page, profile_page):
 # 5. Navigation
 # ---------------------------------------------------------------------------
 
-def test_the_avatar_pencil_opens_edit_details(page, profile_page):
-    profile_page.open_edit_details()
+def test_the_avatar_pencil_opens_the_avatar_picker(page, profile_page):
+    """The pencil is for the picture only: it raises the Change Profile picker
+    over the page instead of going anywhere. The account itself is edited
+    through My Account (section 11). Nothing is set here, so the avatar the
+    account has is left alone."""
+    profile_page.open_avatar_picker()
 
-    expect(page).to_have_url(EDIT_PROFILE_URL)
+    expect(profile_page.get_avatar_picker_title()).to_have_text("Change Profile")
+    expect(profile_page.get_avatar_picker_set_button()).to_have_text("SET PROFILE")
+    expect(page).to_have_url(PROFILE_URL)
 
 
 def test_my_courses_opens_subscriptions(page, profile_page):
@@ -336,7 +342,9 @@ def test_the_hero_matches_the_home_api(page):
     expect(profile.get_name()).to_have_text(user["name"])
     assert digits(profile.get_phone().inner_text()) == digits(user["phone"])
     expect(profile.get_course_name()).to_have_text(user["course_name"].strip())
-    expect(profile.get_avatar_image()).to_have_attribute("src", user["avatar"])
+    expect(profile.get_avatar_image()).to_have_attribute(
+        "src", shown_avatar_src(user.get("avatar_key"), user["avatar"], user.get("gender"))
+    )
 
 
 def test_the_join_date_matches_the_home_api(page):
