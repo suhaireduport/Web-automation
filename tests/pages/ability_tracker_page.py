@@ -13,9 +13,10 @@ Average, Weak, Poor or Not Started. The filter counts topics by that category
 over the whole selected subject and keeps the chapters that hold one.
 """
 
+from conftest import BASE_URL
 from pages.question_library_section_page import normalise
 
-URL = "https://eduport-react.pages.dev/analysis/ability-tracker"
+URL = f"{BASE_URL}/analysis/ability-tracker"
 
 # The call the screen is drawn from, as a route pattern for expect_response.
 ABILITY_API = "**/api/v3/analytics/ability/list"

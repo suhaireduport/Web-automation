@@ -25,7 +25,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.exam_page import ExamPage, ExamResultPage, ExamReviewPage
 from pages.home_page import HomePage
 from pages.question_library_exams_page import (
@@ -37,7 +37,7 @@ from pages.question_library_page import QuestionLibraryPage
 from pages.question_library_section_page import searchable_snippet
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 EXAMS_URL = ExamPage.URL
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
 SECTION_URL = ExamsSectionPage.URL

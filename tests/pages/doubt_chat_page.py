@@ -1,10 +1,13 @@
+from conftest import BASE_URL
+
+
 class DoubtChatPage:
     """The AI Doubt Clearance chat at /ai/doubt-clearance.
 
     Reached from the Adapt AI floating button on Home. Messages can be plain
     text, a text plus an attached image, or a voice recording."""
 
-    URL = "https://eduport-react.pages.dev/ai/doubt-clearance"
+    URL = f"{BASE_URL}/ai/doubt-clearance"
 
     def __init__(self, page):
         self.page = page

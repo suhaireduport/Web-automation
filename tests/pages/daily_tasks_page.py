@@ -1,8 +1,10 @@
 import re
 
+from conftest import BASE_URL
+
 
 class DailyTasksPage:
-    URL = "https://eduport-react.pages.dev/daily-tasks"
+    URL = f"{BASE_URL}/daily-tasks"
 
     def __init__(self, page):
         self.page = page

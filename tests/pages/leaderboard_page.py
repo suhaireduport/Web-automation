@@ -2,6 +2,8 @@ import re
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+from conftest import BASE_URL
+
 # How many places the podium takes off the top of a board before the list
 # starts. A board with this many students or fewer is drawn as a plain list.
 PODIUM_PLACES = 3
@@ -43,7 +45,7 @@ class LeaderboardPage:
     Info button opens as a sheet.
     """
 
-    URL = "https://eduport-react.pages.dev/home/leader_board"
+    URL = f"{BASE_URL}/home/leader_board"
 
     # Tab label -> (rank list path, coin log path). Both hang off
     # /api/v3/analytics/leaderboard/.

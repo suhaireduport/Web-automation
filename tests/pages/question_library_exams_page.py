@@ -1,7 +1,7 @@
 import re
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.question_library_section_page import (
-    BASE_URL,
     SectionQuestionPage,
     normalise,
 )
@@ -263,7 +263,7 @@ class ExamsSearchPage(ExamsSectionPage):
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/exams/search.*"
+        BASE_URL_RE + r"/home/questionLibrary/exams/search.*"
     )
 
     def wait_for_loaded(self):
@@ -313,5 +313,5 @@ class ExamQuestionPage(SectionQuestionPage):
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/exams/\d+/.+/question/\d+.*"
+        BASE_URL_RE + r"/home/questionLibrary/exams/\d+/.+/question/\d+.*"
     )

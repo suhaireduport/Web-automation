@@ -18,14 +18,14 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL_RE, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.exam_page import ExamPage, ExamInstructionsPage, ExamResultPage
 
 
 EXAMS_URL = ExamPage.URL
 INSTRUCTIONS_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/exams/\d+/instructions.*"
+    BASE_URL_RE + r"/exams/\d+/instructions.*"
 )
 
 NO_PAST_EXAMS = "No past exams for this user"

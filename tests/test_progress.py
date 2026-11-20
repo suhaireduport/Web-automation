@@ -46,7 +46,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.chapter_page import ChapterPage
 from pages.topic_page import TopicPage
@@ -54,7 +54,7 @@ from pages.subtopic_page import SubtopicPage
 
 OTP = "430582"
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 # How much of the course is looked at when deciding where to work. Only the
 # unlocked chapters count, and a course can carry a lot of subjects, so the

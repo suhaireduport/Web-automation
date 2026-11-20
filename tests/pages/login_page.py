@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class LoginPage:
     """The login screen: a country selector, a phone box and Send OTP.
@@ -10,7 +12,7 @@ class LoginPage:
     into it is dropped rather than rejected with a message.
     """
 
-    URL = "https://eduport-react.pages.dev/login"
+    URL = f"{BASE_URL}/login"
 
     def __init__(self, page):
         self.page = page

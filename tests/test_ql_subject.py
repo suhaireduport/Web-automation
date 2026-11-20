@@ -19,7 +19,7 @@ from urllib.parse import quote
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.practice_page import (
     MODES,
@@ -39,7 +39,7 @@ from pages.question_library_subject_page import (
 )
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
 
 NO_SUBJECTS = (

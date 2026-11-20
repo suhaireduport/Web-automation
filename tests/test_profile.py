@@ -17,8 +17,9 @@ the avatar, the join date and the mentor behind Call My Mentor come from too,
 so that payload is what those are held against.
 
 Three of the cards raise a sheet instead of routing: My Account is a small
-editable form, Help Center is a hosted form in an iframe, and WhatsApp and
-Contact Us both open the same contact sheet.
+editable form, Help Center opens the Help Center dialog (covered in
+test_help_center.py), and WhatsApp and Contact Us both open the same contact
+sheet.
 
 This account is the one the rest of the suite signs in as, and the context it
 is signed in on is shared, so everything here that changes something puts it
@@ -29,29 +30,28 @@ import random
 import re
 import string
 from datetime import datetime
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.edit_profile_page import EditProfilePage
 from pages.home_page import HomePage
 from pages.profile_page import ProfilePage, shown_avatar_src
 from pages.leaderboard_page import call_api, read_balance
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 PROFILE_URL = ProfilePage.URL
-EDIT_PROFILE_URL = "https://eduport-react.pages.dev/profile/edit"
-SUBSCRIPTIONS_URL = "https://eduport-react.pages.dev/subscriptions"
-PREFERENCES_URL = "https://eduport-react.pages.dev/preferences"
+EDIT_PROFILE_URL = f"{BASE_URL}/profile/edit"
+SUBSCRIPTIONS_URL = f"{BASE_URL}/subscriptions"
+PREFERENCES_URL = f"{BASE_URL}/preferences"
 
 ANALYSIS_API = "**/api/v3/profile/analysis"
 HOME_API = "**/api/v3/home"
 PROFILE_UPDATE_API = "**/api/v3/profile/update"
-TERMS_URL = "https://eduport-react.pages.dev/terms"
-LOGIN_URL = "https://eduport-react.pages.dev/login"
+TERMS_URL = f"{BASE_URL}/terms"
+LOGIN_URL = f"{BASE_URL}/login"
 
 # What the page draws in place of a number it has not been given yet, and what
 # it falls back to when the call it wanted never arrives.
@@ -516,30 +516,6 @@ def test_tapping_outside_my_account_closes_it(profile_page):
 # ---------------------------------------------------------------------------
 # 12. Help & Support
 # ---------------------------------------------------------------------------
-
-def test_help_center_opens_a_form_that_already_knows_the_account(page):
-    """The form is hosted elsewhere and is handed the account in its address,
-    so what it was handed is held against the home call."""
-    profile, home = open_profile_with(page, HOME_API)
-    user = home["user"]
-
-    profile.open_help_center()
-
-    expect(profile.get_help_iframe()).to_be_visible()
-    handed = parse_qs(urlparse(profile.get_help_iframe().get_attribute("src")).query)
-    assert handed["name"][0] == user["name"]
-    assert handed["phone"][0] == user["phone"]
-    assert handed["unique_student_id"][0] == user["unique_student_id"]
-    assert handed["current_choosed_course"][0].strip() == user["course_name"].strip()
-
-
-def test_help_center_closes_again(profile_page):
-    profile_page.open_help_center()
-
-    profile_page.close_help_center()
-
-    expect(profile_page.get_help_overlay()).to_have_count(0)
-
 
 @pytest.mark.parametrize("card", ["Contact Us", "WhatsApp"])
 def test_both_contact_cards_open_the_same_contact_sheet(profile_page, card):

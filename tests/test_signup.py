@@ -18,6 +18,7 @@ import string
 import pytest
 from playwright.sync_api import expect
 
+from conftest import BASE_URL
 from pages.login_page import LoginPage
 from pages.otp_page import OtpPage
 from pages.home_page import HomePage
@@ -28,7 +29,7 @@ OTP = "4305"
 
 OTP_URL = OtpPage.URL
 NEW_USER_URL = SignupPage.URL
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 PROFILE_UPDATE_API = "**/api/v3/profile/update"
 

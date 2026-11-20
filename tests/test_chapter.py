@@ -2,20 +2,20 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, BASE_URL_RE, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.chapter_page import ChapterPage
 
 OTP = "430582"
 
-OTP_URL = "https://eduport-react.pages.dev/otp"
-HOME_URL = "https://eduport-react.pages.dev/"
+OTP_URL = f"{BASE_URL}/otp"
+HOME_URL = f"{BASE_URL}/"
 
 CHAPTER_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/home/subject/\d+/.+"
+    BASE_URL_RE + r"/home/subject/\d+/.+"
 )
 TOPICS_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/home/subject/\d+/.+/topics/\d+"
+    BASE_URL_RE + r"/home/subject/\d+/.+/topics/\d+"
 )
 
 

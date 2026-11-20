@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class StreakPage:
     """The streak screen behind the streak chip in the app header.
@@ -9,7 +11,7 @@ class StreakPage:
     days across the middle and the line underneath.
     """
 
-    URL = "https://eduport-react.pages.dev/home/streak"
+    URL = f"{BASE_URL}/home/streak"
 
     def __init__(self, page):
         self.page = page

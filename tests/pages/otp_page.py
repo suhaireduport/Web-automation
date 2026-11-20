@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class OtpPage:
     """The OTP screen: four boxes that verify themselves.
@@ -16,7 +18,7 @@ class OtpPage:
     WhatsApp, and the code goes out when one of the two is chosen.
     """
 
-    URL = "https://eduport-react.pages.dev/otp"
+    URL = f"{BASE_URL}/otp"
 
     def __init__(self, page):
         self.page = page

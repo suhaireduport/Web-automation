@@ -1,4 +1,4 @@
-BASE_URL = "https://eduport-react.pages.dev"
+from conftest import BASE_URL
 
 
 class SubscriptionPage:

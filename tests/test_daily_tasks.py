@@ -3,18 +3,18 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.daily_tasks_page import DailyTasksPage
 
 OTP = "430582"
 
-OTP_URL = "https://eduport-react.pages.dev/otp"
-HOME_URL = "https://eduport-react.pages.dev/"
-DAILY_TASKS_URL = "https://eduport-react.pages.dev/daily-tasks"
-PENDING_TASKS_URL = "https://eduport-react.pages.dev/tasks/pendingTask"
-LEADERBOARD_URL = "https://eduport-react.pages.dev/home/leader_board"
-STREAK_URL = "https://eduport-react.pages.dev/home/streak"
+OTP_URL = f"{BASE_URL}/otp"
+HOME_URL = f"{BASE_URL}/"
+DAILY_TASKS_URL = f"{BASE_URL}/daily-tasks"
+PENDING_TASKS_URL = f"{BASE_URL}/tasks/pendingTask"
+LEADERBOARD_URL = f"{BASE_URL}/home/leader_board"
+STREAK_URL = f"{BASE_URL}/home/streak"
 
 
 @pytest.fixture

@@ -1,5 +1,6 @@
 import re
 
+from conftest import BASE_URL_RE
 from pages.question_library_section_page import (
     SectionQuestionsPage,
     SectionQuestionPage,
@@ -16,7 +17,7 @@ class SubjectPage:
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/subject/\d+/[^/]+$"
+        BASE_URL_RE + r"/home/questionLibrary/subject/\d+/[^/]+$"
     )
 
     # The breakdown a chapter card carries. Bookmark is not an answer state:
@@ -162,7 +163,7 @@ class SubjectSearchPage:
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/subject/\d+/[^/]+/search$"
+        BASE_URL_RE + r"/home/questionLibrary/subject/\d+/[^/]+/search$"
     )
 
     def __init__(self, page):
@@ -334,5 +335,5 @@ class SubjectQuestionPage(SectionQuestionPage):
     """A single question opened from a subject chapter."""
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/subject/\d+/.+/chapter/\d+/.+/question/\d+.*"
+        BASE_URL_RE + r"/home/questionLibrary/subject/\d+/.+/chapter/\d+/.+/question/\d+.*"
     )

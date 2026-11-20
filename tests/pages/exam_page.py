@@ -2,11 +2,12 @@ import re
 
 from playwright.sync_api import expect
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.question_library_section_page import normalise
 
 
 class ExamPage:
-    URL = "https://eduport-react.pages.dev/exams"
+    URL = f"{BASE_URL}/exams"
 
     def __init__(self, page):
         self.page = page
@@ -367,7 +368,7 @@ class ExamResultPage:
     Result. A cell is what opens the question itself.
     """
 
-    URL_PATTERN = re.compile(r"https://eduport-react\.pages\.dev/exams/\d+/result.*")
+    URL_PATTERN = re.compile(BASE_URL_RE + r"/exams/\d+/result.*")
 
     def __init__(self, page):
         self.page = page
@@ -439,7 +440,7 @@ class ExamReviewPage:
     their marking rather than taking a new one.
     """
 
-    URL_PATTERN = re.compile(r"https://eduport-react\.pages\.dev/exams/\d+/review.*")
+    URL_PATTERN = re.compile(BASE_URL_RE + r"/exams/\d+/review.*")
 
     def __init__(self, page):
         self.page = page

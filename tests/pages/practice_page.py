@@ -4,9 +4,10 @@ from html import unescape
 
 from playwright.sync_api import Error as PlaywrightError
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.home_page import HomePage
 from pages.leaderboard_page import call_api, read_balance, read_coin_log
-from pages.question_library_section_page import BASE_URL, normalise
+from pages.question_library_section_page import normalise
 
 
 class AddTopicsPage:
@@ -22,7 +23,7 @@ class AddTopicsPage:
     # the Practice Now button of its study recommendations, which roots the
     # route at the chapter being recommended instead of at Home.
     SUBJECT_URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/subject/\d+/.+"
+        BASE_URL_RE + r"/home/questionLibrary/subject/\d+/.+"
         r"/chapter/\d+/.+/addtopic$"
     )
 
@@ -234,7 +235,7 @@ class PracticeConfigPage:
     """The practice setup: the topics picked, the mode and how many questions."""
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/homePractice/addtopic/problemBased/practice.*"
+        BASE_URL_RE + r"/home/homePractice/addtopic/problemBased/practice.*"
     )
 
     def __init__(self, page):
@@ -356,7 +357,7 @@ class PracticeQuestionPage:
     # A set names its mode in its own route: quick practice goes straight to
     # its questions, problem based stops at an instruction screen first.
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/homePractice/addtopic/problemBased/"
+        BASE_URL_RE + r"/home/homePractice/addtopic/problemBased/"
         r"practice/(quickPractice|instruction)/\d+.*"
     )
 

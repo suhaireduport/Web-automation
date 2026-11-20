@@ -20,8 +20,8 @@ the only write on either screen.
 import re
 from urllib.parse import urlencode
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.leaderboard_page import call_api
-from pages.question_library_section_page import BASE_URL
 
 # The wheel, in minutes, and where it starts.
 DURATIONS = list(range(5, 95, 5))
@@ -218,7 +218,7 @@ class SelfLearnPage:
 
 class SelfLearnTimerPage:
     URL = f"{BASE_URL}/tasks/selfLearn/timer"
-    URL_PATTERN = re.compile(r"https://eduport-react\.pages\.dev/tasks/selfLearn/timer\?.+")
+    URL_PATTERN = re.compile(BASE_URL_RE + r"/tasks/selfLearn/timer\?.+")
 
     def __init__(self, page):
         self.page = page

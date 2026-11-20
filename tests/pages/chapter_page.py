@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class ChapterPage:
     def __init__(self, page):
@@ -7,7 +9,7 @@ class ChapterPage:
 
     # ---------- page ----------
 
-    URL = "https://eduport-react.pages.dev/home/subject"
+    URL = f"{BASE_URL}/home/subject"
 
     def open(self, url):
         self.page.goto(url)

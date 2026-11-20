@@ -12,19 +12,19 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, BASE_URL_RE, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.chapter_page import ChapterPage
 from pages.topic_page import TopicPage
 from pages.subtopic_page import SubtopicPage, MiniPlayer
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 TOPICS_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/home/subject/\d+/.+/topics/\d+$"
+    BASE_URL_RE + r"/home/subject/\d+/.+/topics/\d+$"
 )
 PLAYER_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/home/subject/\d+/.+/topics/\d+/player/\d+/.+"
+    BASE_URL_RE + r"/home/subject/\d+/.+/topics/\d+/player/\d+/.+"
 )
 
 DEFAULT_SUBJECT = 0

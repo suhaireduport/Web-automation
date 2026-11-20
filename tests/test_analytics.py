@@ -2,19 +2,19 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, BASE_URL_RE, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.analytics_page import AnalyticsPage
 
 OTP = "430582"
 
-OTP_URL = "https://eduport-react.pages.dev/otp"
-HOME_URL = "https://eduport-react.pages.dev/"
-ANALYTICS_URL = "https://eduport-react.pages.dev/analytics"
-EFFORT_TRACKER_URL = "https://eduport-react.pages.dev/analysis/effort-tracker"
-ABILITY_TRACKER_URL = "https://eduport-react.pages.dev/analysis/ability-tracker"
-LEADERBOARD_URL = "https://eduport-react.pages.dev/home/leader_board"
-STREAK_URL = "https://eduport-react.pages.dev/home/streak"
+OTP_URL = f"{BASE_URL}/otp"
+HOME_URL = f"{BASE_URL}/"
+ANALYTICS_URL = f"{BASE_URL}/analytics"
+EFFORT_TRACKER_URL = f"{BASE_URL}/analysis/effort-tracker"
+ABILITY_TRACKER_URL = f"{BASE_URL}/analysis/ability-tracker"
+LEADERBOARD_URL = f"{BASE_URL}/home/leader_board"
+STREAK_URL = f"{BASE_URL}/home/streak"
 
 
 @pytest.fixture
@@ -153,7 +153,7 @@ def test_subject_opens_ability_tracker(page, analytics_page):
 
     expect(page).to_have_url(
         re.compile(
-            r"https://eduport-react\.pages\.dev/analysis/ability-tracker\?subject=\d+"
+            BASE_URL_RE + r"/analysis/ability-tracker\?subject=\d+"
         )
     )
 

@@ -10,15 +10,15 @@ import string
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.edit_profile_page import EditProfilePage
 from pages.home_page import HomePage
 from pages.leaderboard_page import call_api
 from pages.profile_page import ProfilePage
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
-PROFILE_URL = "https://eduport-react.pages.dev/profile"
+HOME_URL = f"{BASE_URL}/"
+PROFILE_URL = f"{BASE_URL}/profile"
 EDIT_PROFILE_URL = EditProfilePage.URL
 PROFILE_UPDATE_API = "**/api/v3/profile/update"
 

@@ -24,8 +24,9 @@ sending is the one thing on the screen that would.
 import re
 from urllib.parse import quote, unquote, urlencode, urlparse
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.leaderboard_page import call_api
-from pages.question_library_section_page import BASE_URL, normalise
+from pages.question_library_section_page import normalise
 
 UPCOMING = "upcoming"
 STREAMED = "streamed"
@@ -216,10 +217,10 @@ class LiveClassesPage:
 
 class LivePlayerPage:
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/liveClasses/live/\d+/[^/?]+(\?.*)?$"
+        BASE_URL_RE + r"/home/liveClasses/live/\d+/[^/?]+(\?.*)?$"
     )
     TASKS_URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/tasks/live/\d+/[^/?]+(\?.*)?$"
+        BASE_URL_RE + r"/tasks/live/\d+/[^/?]+(\?.*)?$"
     )
 
     def __init__(self, page):

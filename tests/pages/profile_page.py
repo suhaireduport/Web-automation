@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class ProfilePage:
     """The Profile page behind the home avatar.
@@ -13,8 +15,8 @@ class ProfilePage:
 
     Three of the cards open a sheet over the page rather than routing anywhere:
     My Account is a small editable form (name, gender, a locked date of birth),
-    Help Center is a hosted form in an iframe, and WhatsApp and Contact Us both
-    open the same contact sheet. Call My Mentor dials rather than navigating.
+    Help Center opens the Help Center dialog (pages/help_center_page.py), and
+    WhatsApp and Contact Us both open the same contact sheet. Call My Mentor dials rather than navigating.
 
     The pencil on the avatar (get_avatar_edit) opens a "Change Profile" avatar
     picker, which is only for choosing the picture. The account itself is
@@ -22,7 +24,7 @@ class ProfilePage:
     linked from this page; the route still works when loaded by URL.
     """
 
-    URL = "https://eduport-react.pages.dev/profile"
+    URL = f"{BASE_URL}/profile"
 
     def __init__(self, page):
         self.page = page
@@ -309,27 +311,6 @@ class ProfilePage:
 
     def close_account_from_outside(self):
         self.get_account_overlay().click(position={"x": 5, "y": 5})
-
-    # ---------- Help Center sheet ----------
-
-    def open_help_center(self):
-        self.click_card("Help Center")
-        self.get_help_panel().wait_for()
-
-    def get_help_overlay(self):
-        return self.page.locator(".hc-overlay")
-
-    def get_help_panel(self):
-        return self.page.locator(".hc-panel")
-
-    def get_help_iframe(self):
-        return self.page.locator(".hc-iframe")
-
-    def get_help_close(self):
-        return self.page.locator(".hc-close")
-
-    def close_help_center(self):
-        self.get_help_close().click()
 
     # ---------- Contact sheet ----------
     #

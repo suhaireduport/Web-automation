@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class EditProfilePage:
     """Edit Details, reached from the profile menu.
@@ -8,7 +10,7 @@ class EditProfilePage:
     of birth locked. Saving posts the profile and drops the user back on home.
     """
 
-    URL = "https://eduport-react.pages.dev/profile/edit"
+    URL = f"{BASE_URL}/profile/edit"
 
     def __init__(self, page):
         self.page = page

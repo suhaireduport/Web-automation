@@ -21,14 +21,14 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import SECOND_STUDENT_MOBILE
+from conftest import BASE_URL, BASE_URL_RE, SECOND_STUDENT_MOBILE
 from pages.exam_page import ExamPage, ExamInstructionsPage
 from pages.live_exam_page import LiveExamPage
 
-EXAMS_URL = "https://eduport-react.pages.dev/exams"
+EXAMS_URL = f"{BASE_URL}/exams"
 EXAM_LIST_API = "**/api/v3/exams/all"
 INSTRUCTIONS_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/exams/\d+/instructions.*"
+    BASE_URL_RE + r"/exams/\d+/instructions.*"
 )
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -207,7 +207,7 @@ def test_cancelling_the_warning_keeps_the_exam_unstarted(page, entitled_live_exa
     entitled_live_exams.cancel_start()
 
     expect(entitled_live_exams.get_confirm_modal()).to_have_count(0)
-    expect(page).to_have_url(re.compile(r"https://eduport-react\.pages\.dev/exams(\?.*)?$"))
+    expect(page).to_have_url(re.compile(BASE_URL_RE + r"/exams(\?.*)?$"))
     expect(entitled_live_exams.get_attempt_button(index)).to_be_enabled()
 
 

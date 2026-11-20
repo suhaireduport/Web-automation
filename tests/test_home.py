@@ -5,7 +5,7 @@ from urllib.parse import unquote, unquote_plus
 import pytest
 from playwright.sync_api import expect
 
-from conftest import NON_PREMIUM_MOBILE, STUDENT_MOBILE
+from conftest import BASE_URL, BASE_URL_RE, NON_PREMIUM_MOBILE, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.leaderboard_page import call_api
 from pages.search_page import SEARCH_API, SearchPage, strip_number
@@ -75,7 +75,7 @@ def test_exams(page):
     expect(exams_button).to_be_visible()
     home_page.get_exams_button().click()
     page.wait_for_timeout(2000)
-    expect(page).to_have_url("https://eduport-react.pages.dev/exams")
+    expect(page).to_have_url(f"{BASE_URL}/exams")
 
 def test_daily_tasks(page):
 
@@ -89,7 +89,7 @@ def test_daily_tasks(page):
 
     page.wait_for_timeout(2000)
 
-    expect(page).to_have_url("https://eduport-react.pages.dev/daily-tasks")
+    expect(page).to_have_url(f"{BASE_URL}/daily-tasks")
 
 
 def test_analysis(page):
@@ -104,7 +104,7 @@ def test_analysis(page):
 
     page.wait_for_timeout(2000)
 
-    expect(page).to_have_url("https://eduport-react.pages.dev/analytics")
+    expect(page).to_have_url(f"{BASE_URL}/analytics")
 
 
 def test_subject_count(page):
@@ -131,7 +131,7 @@ def test_subject_open(page):
     subject = subjects.nth(0)
     subject.click()
     page.wait_for_timeout(2000)
-    expect(page).to_have_url(re.compile(r"https://eduport-react\.pages\.dev/home/subject/.*"))
+    expect(page).to_have_url(re.compile(BASE_URL_RE + r"/home/subject/.*"))
 
 # Opening a resource used to be checked here by tapping the fifth button in the
 # row and looking at the route, and counting them by printing the titles without
@@ -147,7 +147,7 @@ def test_lives_open(page):
 
     lives.click()
 
-    expect(page).to_have_url("https://eduport-react.pages.dev/lives")
+    expect(page).to_have_url(f"{BASE_URL}/lives")
 
 def test_practice_open(page):
 
@@ -157,7 +157,7 @@ def test_practice_open(page):
     expect(practice).to_be_visible()
 
     practice.click()
-    expect(page).to_have_url("https://eduport-react.pages.dev/home/homePractice/addtopic/problemBased")
+    expect(page).to_have_url(f"{BASE_URL}/home/homePractice/addtopic/problemBased")
 
 def test_question_library_open(page):
 
@@ -167,7 +167,7 @@ def test_question_library_open(page):
     expect(question_library).to_be_visible()
 
     question_library.click()
-    expect(page).to_have_url("https://eduport-react.pages.dev/home/questionLibrary")
+    expect(page).to_have_url(f"{BASE_URL}/home/questionLibrary")
 
 def test_coin_button(page):
 
@@ -180,7 +180,7 @@ def test_coin_button(page):
 
     page.wait_for_timeout(2000)
 
-    expect(page).to_have_url("https://eduport-react.pages.dev/home/leader_board")
+    expect(page).to_have_url(f"{BASE_URL}/home/leader_board")
 
 
 def test_streak_button(page):
@@ -194,7 +194,7 @@ def test_streak_button(page):
 
     page.wait_for_timeout(2000)
 
-    expect(page).to_have_url("https://eduport-react.pages.dev/home/streak")
+    expect(page).to_have_url(f"{BASE_URL}/home/streak")
 
 def test_ai_chat(page):
 
@@ -206,7 +206,7 @@ def test_ai_chat(page):
     ai_button.click()
 
     # The button used to open a chooser sheet; it now opens the chat directly.
-    expect(page).to_have_url("https://eduport-react.pages.dev/ai/doubt-clearance")
+    expect(page).to_have_url(f"{BASE_URL}/ai/doubt-clearance")
 
 def test_mini_player_visibilty(page):
 
@@ -270,7 +270,7 @@ def test_no_contact_us_card_for_premium_user(page):
 # has to be listened for before the navigation that asks for it.
 # ---------------------------------------------------------------------------
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 HOME_API = "**/api/v3/home"
 COINS_API = "**/api/v3/analytics/leaderboard/coins"
@@ -384,9 +384,9 @@ def test_streak_chip_matches_the_streak_api(page):
     assert digits(home_page.get_streak_button().inner_text()) == str(streak)
 
 
-EXAMS_URL = "https://eduport-react.pages.dev/exams"
-DAILY_TASKS_URL = "https://eduport-react.pages.dev/daily-tasks"
-SIGNUP_URL = "https://eduport-react.pages.dev/signup"
+EXAMS_URL = f"{BASE_URL}/exams"
+DAILY_TASKS_URL = f"{BASE_URL}/daily-tasks"
+SIGNUP_URL = f"{BASE_URL}/signup"
 
 PROFILE_UPDATE_API = "**/api/v3/profile/update"
 
@@ -403,7 +403,7 @@ BANNER_IMAGE = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAA"
     "DUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
-TERMS_URL = "https://eduport-react.pages.dev/terms"
+TERMS_URL = f"{BASE_URL}/terms"
 
 
 @pytest.fixture
@@ -559,8 +559,8 @@ def test_a_search_result_opens_the_item_and_shuts_the_search(page, home_page):
 
     expect(page).to_have_url(
         re.compile(
-            r"^https://eduport-react\.pages\.dev"
-            rf"/home/subject/{wanted['subject_id']}/.+/topics/{wanted['id']}$"
+            "^" + BASE_URL_RE
+            + rf"/home/subject/{wanted['subject_id']}/.+/topics/{wanted['id']}$"
         )
     )
     assert not sheet.is_open()
@@ -855,8 +855,8 @@ def test_opening_a_subject_carries_that_subjects_id_and_title(page):
 
     expect(page).to_have_url(
         re.compile(
-            r"^https://eduport-react\.pages\.dev"
-            rf"/home/subject/{subject['id']}/"
+            "^" + BASE_URL_RE
+            + rf"/home/subject/{subject['id']}/"
         )
     )
     carried = unquote(page.url).split(f"/home/subject/{subject['id']}/", 1)[1]

@@ -36,7 +36,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import SECOND_STUDENT_MOBILE
+from conftest import BASE_URL, SECOND_STUDENT_MOBILE
 from pages.daily_tasks_page import DailyTasksPage
 from pages.home_page import HomePage
 from pages.practice_page import (
@@ -54,7 +54,7 @@ from pages.practice_page import (
     WRONG,
 )
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 # The calls the flow makes, taken from the network rather than guessed at.
 CREATE_API = "practice-quiz/create"

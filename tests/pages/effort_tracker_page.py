@@ -19,7 +19,9 @@ from.
 
 import math
 
-URL = "https://eduport-react.pages.dev/analysis/effort-tracker"
+from conftest import BASE_URL
+
+URL = f"{BASE_URL}/analysis/effort-tracker"
 
 # The call the screen is drawn from, as a route pattern for expect_response.
 EFFORT_API = "**/api/v3/analytics/effort/list?*"

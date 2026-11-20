@@ -34,7 +34,7 @@ What is deliberately not here, because it is already covered:
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.leaderboard_page import read_balance, read_coin_log
 from pages.practice_page import (
     CORRECT,
@@ -47,7 +47,7 @@ from pages.practice_page import (
     start_quick_practice,
 )
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 MODE = QUICK_PRACTICE
 QUESTIONS_API, SUBMIT_API = QUIZ_APIS[MODE]

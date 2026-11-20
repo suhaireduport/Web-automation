@@ -19,7 +19,7 @@ import random
 import pytest
 from playwright.sync_api import expect
 
-from conftest import SECOND_STUDENT_MOBILE
+from conftest import BASE_URL, SECOND_STUDENT_MOBILE
 from pages.login_page import LoginPage
 from pages.otp_page import OtpPage
 from pages.signup_page import SignupPage
@@ -28,8 +28,8 @@ OTP = "4305"
 
 LOGIN_URL = LoginPage.URL
 OTP_URL = OtpPage.URL
-HOME_URL = "https://eduport-react.pages.dev/"
-NEW_USER_URL = "https://eduport-react.pages.dev/new-user"
+HOME_URL = f"{BASE_URL}/"
+NEW_USER_URL = f"{BASE_URL}/new-user"
 
 VERIFY_API = "**/api/v3/otp/verify"
 

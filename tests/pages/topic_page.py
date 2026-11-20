@@ -1,5 +1,6 @@
 import re
 
+from conftest import BASE_URL_RE
 from pages.practice_page import PracticeQuestionPage
 
 
@@ -350,7 +351,7 @@ class TopicQuizPage(PracticeQuestionPage):
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/subject/\d+/[^/]+/topics/\d+"
+        BASE_URL_RE + r"/home/subject/\d+/[^/]+/topics/\d+"
         r"/topic_quiz/(\d+)/[^/?]+\?.*qt=(\d+)"
     )
 

@@ -12,7 +12,13 @@ try:
 except ImportError:  # pytest-html not installed, or switched off with -p no:html
     html_extras = None
 
-BASE_URL = "https://eduport-react.pages.dev"
+# The frontend the whole suite runs against. Every test and page object builds
+# its URLs from this, so pointing the suite at another server (UAT, say) means
+# changing this one line. No trailing slash. The backend API is separate and
+# is not affected: API_BASE in tests/pages/leaderboard_page.py.
+BASE_URL = "https://eduport-react.pages.dev/"
+# BASE_URL escaped for use at the start of a regex (URL_PATTERN, to_have_url).
+BASE_URL_RE = re.escape(BASE_URL)
 LOGIN_URL = f"{BASE_URL}/login"
 OTP_URL = f"{BASE_URL}/otp"
 HOME_URL = f"{BASE_URL}/"

@@ -1,8 +1,9 @@
 import re
 from urllib.parse import quote
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.leaderboard_page import call_api
-from pages.question_library_section_page import BASE_URL, normalise
+from pages.question_library_section_page import normalise
 
 # The folder's own call. Everything a folder shows comes from it, keyed on the
 # folder the home call named.
@@ -33,7 +34,7 @@ class ResourcesPage:
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/resources/\d+/[^/]+/\d+$"
+        BASE_URL_RE + r"/home/resources/\d+/[^/]+/\d+$"
     )
 
     def __init__(self, page):
@@ -153,7 +154,7 @@ class ResourceVideoPage:
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/resources/\d+/[^/]+/\d+/video/"
+        BASE_URL_RE + r"/home/resources/\d+/[^/]+/\d+/video/"
     )
 
     def __init__(self, page):
@@ -231,7 +232,7 @@ class ResourceSearchPage:
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/resources/\d+/[^/]+/\d+/resourceSearch$"
+        BASE_URL_RE + r"/home/resources/\d+/[^/]+/\d+/resourceSearch$"
     )
 
     def __init__(self, page):

@@ -20,9 +20,10 @@ the screen writes beside the title in the colour the label came with.
 
 import math
 
+from conftest import BASE_URL
 from pages.question_library_section_page import normalise
 
-URL = "https://eduport-react.pages.dev/analysis/syllabus-tracker"
+URL = f"{BASE_URL}/analysis/syllabus-tracker"
 
 # The call the screen is drawn from, as a route pattern for expect_response.
 SYLLABUS_API = "**/api/v3/analytics/ability/syllabus-tracker"

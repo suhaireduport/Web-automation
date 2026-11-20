@@ -2,9 +2,8 @@ import re
 
 from playwright.sync_api import expect
 
+from conftest import BASE_URL, BASE_URL_RE
 from pages.leaderboard_page import call_api
-
-BASE_URL = "https://eduport-react.pages.dev"
 
 NOTES_ADD_API = "**/question-bank/notes/add"
 
@@ -236,7 +235,7 @@ class SectionQuestionsPage:
     """
 
     URL_PATTERN = re.compile(
-        r"https://eduport-react\.pages\.dev/home/questionLibrary/subject/\d+/.+/chapter/\d+/.+"
+        BASE_URL_RE + r"/home/questionLibrary/subject/\d+/.+/chapter/\d+/.+"
     )
 
     def __init__(self, page):

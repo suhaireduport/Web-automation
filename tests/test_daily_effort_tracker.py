@@ -35,7 +35,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.analytics_page import AnalyticsPage
 from pages.effort_tracker_page import (
     DAY_TAB,
@@ -53,7 +53,7 @@ from pages.effort_tracker_page import (
 from pages.home_page import HomePage
 from pages.leaderboard_page import call_api
 
-ANALYTICS_URL = "https://eduport-react.pages.dev/analytics"
+ANALYTICS_URL = f"{BASE_URL}/analytics"
 
 # How far back the day arrows go. The sixth step back is the last one the
 # Previous arrow will take.

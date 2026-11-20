@@ -10,12 +10,12 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.question_library_page import QuestionLibraryPage
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
 
 # The four cards above the subject list, in the order the screen shows them.

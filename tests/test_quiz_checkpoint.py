@@ -24,14 +24,14 @@ import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.chapter_page import ChapterPage
 from pages.home_page import HomePage
 from pages.leaderboard_page import read_balance, read_coin_log
 from pages.subtopic_page import SubtopicPage
 from pages.topic_page import TopicPage
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 # How far to look for a checkpoint. A course carries far more subtopics than a
 # test can open, so the search is bounded and says so when it gives up.

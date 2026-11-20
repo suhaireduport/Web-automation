@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class QuestionLibraryPage:
     """The Question Library landing screen.
@@ -8,7 +10,7 @@ class QuestionLibraryPage:
     header that opens a "How it works?" dialog.
     """
 
-    URL = "https://eduport-react.pages.dev/home/questionLibrary"
+    URL = f"{BASE_URL}/home/questionLibrary"
 
     def __init__(self, page):
         self.page = page

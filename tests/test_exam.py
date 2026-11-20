@@ -9,12 +9,12 @@ from collections import Counter
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.exam_page import ExamPage
 
 
-EXAMS_URL = "https://eduport-react.pages.dev/exams"
+EXAMS_URL = f"{BASE_URL}/exams"
 
 
 @pytest.fixture

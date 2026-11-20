@@ -30,7 +30,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import SECOND_STUDENT_MOBILE
+from conftest import BASE_URL, SECOND_STUDENT_MOBILE
 from pages.bookmark_page import BookmarkPage, BookmarkQuestionsPage, BookmarkQuestionPage
 from pages.home_page import HomePage
 from pages.practice_page import start_quick_practice
@@ -38,7 +38,7 @@ from pages.question_library_page import QuestionLibraryPage
 from pages.question_library_section_page import read_section_count
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 QUESTION_LIBRARY_URL = QuestionLibraryPage.URL
 BOOKMARK_URL = BookmarkPage.URL
 

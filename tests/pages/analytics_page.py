@@ -1,5 +1,8 @@
+from conftest import BASE_URL
+
+
 class AnalyticsPage:
-    URL = "https://eduport-react.pages.dev/analytics"
+    URL = f"{BASE_URL}/analytics"
 
     def __init__(self, page):
         self.page = page

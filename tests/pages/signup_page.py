@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL
+
 
 class SignupPage:
     """The new-user wizard a brand new number lands on after verifying its OTP.
@@ -20,7 +22,7 @@ class SignupPage:
     Class / Course dropdowns - is gone, and with it the ``.sp-*`` markup.
     """
 
-    URL = "https://eduport-react.pages.dev/new-user"
+    URL = f"{BASE_URL}/new-user"
 
     def __init__(self, page):
         self.page = page
@@ -212,7 +214,7 @@ class PersonalisingPage:
     everything it shows in one hop.
     """
 
-    URL = "https://eduport-react.pages.dev/onboarding-adaptive"
+    URL = f"{BASE_URL}/onboarding-adaptive"
 
     TEXT = "Personalising your learning experience..."
 

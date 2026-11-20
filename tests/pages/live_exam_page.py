@@ -1,5 +1,7 @@
 import re
 
+from conftest import BASE_URL_RE
+
 
 class LiveExamPage:
     """The exam player reached by starting an exam.
@@ -9,7 +11,7 @@ class LiveExamPage:
     movement is the question palette strip along the top.
     """
 
-    URL_PATTERN = re.compile(r"https://eduport-react\.pages\.dev/exams/\d+/take.*")
+    URL_PATTERN = re.compile(BASE_URL_RE + r"/exams/\d+/take.*")
 
     def __init__(self, page):
         self.page = page

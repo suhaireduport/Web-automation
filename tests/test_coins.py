@@ -28,7 +28,7 @@ file is only about the balance those payments land in.
 import re
 import pytest
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.daily_tasks_page import DailyTasksPage
 from pages.analytics_page import AnalyticsPage
@@ -42,7 +42,7 @@ from pages.leaderboard_page import (
 from pages.practice_page import CORRECT, take_practice_quiz
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
+HOME_URL = f"{BASE_URL}/"
 
 NOTHING_TO_PRACTISE = "No topic on this account has a question left to practise"
 

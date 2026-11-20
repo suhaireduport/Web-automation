@@ -13,16 +13,16 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL_RE, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.exam_page import ExamPage, ExamInstructionsPage, ExamResultPage
 from pages.live_exam_page import LiveExamPage
 
 
 EXAMS_URL = ExamPage.URL
-EXAMS_URL_PATTERN = re.compile(r"https://eduport-react\.pages\.dev/exams(\?.*)?$")
+EXAMS_URL_PATTERN = re.compile(BASE_URL_RE + r"/exams(\?.*)?$")
 INSTRUCTIONS_URL_PATTERN = re.compile(
-    r"https://eduport-react\.pages\.dev/exams/\d+/instructions.*"
+    BASE_URL_RE + r"/exams/\d+/instructions.*"
 )
 EXAM_LIST_API = "**/api/v3/exams/all"
 EXAM_START_API = "**/api/v3/exams/exam-start"

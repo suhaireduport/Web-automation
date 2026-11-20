@@ -4,13 +4,13 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.doubt_chat_page import DoubtChatPage
 
 
-HOME_URL = "https://eduport-react.pages.dev/"
-CHAT_URL = "https://eduport-react.pages.dev/ai/doubt-clearance"
-TERMS_URL = "https://eduport-react.pages.dev/terms"
+HOME_URL = f"{BASE_URL}/"
+CHAT_URL = f"{BASE_URL}/ai/doubt-clearance"
+TERMS_URL = f"{BASE_URL}/terms"
 
 SAMPLE_IMAGE = str(Path(__file__).parent / "data" / "doubt_question.png")
 

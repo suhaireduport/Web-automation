@@ -18,7 +18,7 @@ import allure
 import pytest
 from playwright.sync_api import expect
 
-from conftest import STUDENT_MOBILE
+from conftest import BASE_URL, STUDENT_MOBILE
 from pages.home_page import HomePage
 from pages.login_page import LoginPage
 from pages.otp_page import OtpPage
@@ -31,10 +31,10 @@ pytestmark = [
 ]
 
 LOGIN_URL = LoginPage.URL
-OTP_URL = "https://eduport-react.pages.dev/otp"
-TERMS_URL = "https://eduport-react.pages.dev/terms"
-HOME_URL = "https://eduport-react.pages.dev/"
-EXAMS_URL = "https://eduport-react.pages.dev/exams"
+OTP_URL = f"{BASE_URL}/otp"
+TERMS_URL = f"{BASE_URL}/terms"
+HOME_URL = f"{BASE_URL}/"
+EXAMS_URL = f"{BASE_URL}/exams"
 
 GET_OTP_API = "**/api/v3/otp/get-4-digit"
 CONTACT_API = "**/api/v3/onboarding/contact"
